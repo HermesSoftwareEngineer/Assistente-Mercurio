@@ -1,0 +1,37 @@
+# Evolution API com backend PostgreSQL (Supabase) para sessão persistente no Cloud Run
+# Uso local: docker compose -f docker-compose.evolution.yml up -d
+version: '3.8'
+
+services:
+  evolution-api:
+    image: atendai/evolution-api:latest
+    container_name: evolution-api
+    ports:
+      - "8080:8080"
+    environment:
+      # Servidor
+      SERVER_PORT: 8080
+      SERVER_URL: ${EVOLUTION_PUBLIC_URL}        # URL pública do Cloud Run após deploy
+
+      # Autenticação
+      AUTHENTICATION_TYPE: apikey
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: true
+
+      # Sessão persistente via PostgreSQL (usa o mesmo Supabase do agente)
+      DATABASE_ENABLED: true
+      DATABASE_CONNECTION_URI: ${SUPABASE_DB_URL}  # postgresql://postgres:[senha]@db.[ref].supabase.co:5432/postgres
+      DATABASE_CONNECTION_CLIENT: postgresql
+      DATABASE_SAVE_DATA_INSTANCE: true
+      DATABASE_SAVE_DATA_NEW_MESSAGE: false
+      DATABASE_SAVE_MESSAGE_INST: false
+      DATABASE_SAVE_DATA_CONTACTS: false
+      DATABASE_SAVE_DATA_CHATS: false
+
+      # Webhook padrão (aponta pro agente)
+      WEBHOOK_GLOBAL_URL: ${AGENT_URL}/webhook/whatsapp
+      WEBHOOK_GLOBAL_ENABLED: false   # cada instância define o próprio
+
+      # QR code via base64 na API (sem interface)
+      QRCODE_LIMIT: 30
+    restart: unless-stopped
