@@ -1,33 +1,57 @@
 # Projeto Mercúrio
 
-Assistente pessoal de WhatsApp para comunicação de uma igreja evangélica.
+Assistente pessoal de Hermes Barbosa via WhatsApp.
 
 ## Stack
 - **Interface:** WhatsApp via Evolution API (baileys)
 - **Backend:** Python + Flask
-- **Agente:** LangGraph (StateGraph)
+- **Agente:** Tool Use loop (OpenAI SDK + DeepSeek)
 - **LLM:** DeepSeek V4 Flash
-- **Memória:** Obsidian vault via mcp-obsidian
+- **Transcrição de áudio:** Google Gemini 2.5 Flash
+- **Rastreamento:** LangSmith
+- **Memória:** Obsidian vault
 - **Banco:** Supabase (grupos + histórico)
-- **Infra:** Docker Compose (gunicorn --workers 1)
+- **Tunnel:** ngrok (domínio estático)
 
-## Funcionalidades MVP
-- Gerar avisos formatados para WhatsApp a partir de linguagem natural
-- Enviar para grupos cadastrados com aprovação de rascunho
-- Envio direto com "envia direto"
-- Gerenciar grupos (cadastrar / listar / remover)
+## Funcionalidades
+- Responde mensagens de texto e áudio (transcrição automática)
+- Gera mensagens formatadas para WhatsApp a partir de linguagem natural
+- Envia para grupos cadastrados com aprovação de rascunho ou envio direto
+- Envia mensagem direta para qualquer contato
+- Gerencia grupos (cadastrar / listar / remover)
 - Histórico de envios no Supabase
-- Memória persistente: vault Obsidian lido antes de gerar e atualizado após enviar
-
-## Repositório
-`C:\Users\Hermes\projetos_dev\Assistente-Mercurio`
+- Memória persistente no vault (notas, tarefas, contexto)
+- Busca semântica no vault
+- Painel admin web em `/admin` (login com API key, gerenciar números autorizados)
+- Múltiplos números autorizados (arquivo `data/authorized_numbers.json`)
+- Histórico de conversa por número (últimas 20 mensagens)
+- `/reset` para reiniciar a conversa
+- Distinção dono (Hermes) × outros autorizados (acesso restrito a tools)
 
 ## Fluxo do Agente
 ```
-recall_memory → classify_intent → generate_draft | send_to_groups | manage_groups
-                                                  | query_history  | handle_unknown
-                                                  | save_memory
+mensagem (texto ou áudio)
+  → [áudio] transcreve com Gemini 2.5 Flash
+  → LLM (DeepSeek) com tools disponíveis
+  → executa tools em loop até resposta final
+  → responde via Evolution API
 ```
+
+## Tools disponíveis
+| Tool | Descrição |
+|---|---|
+| `generate_draft` | Gera rascunho formatado para WhatsApp |
+| `send_message` | Envia para grupos |
+| `send_direct_message` | Envia mensagem direta para um contato |
+| `list_groups` | Lista grupos cadastrados |
+| `add_group` | Cadastra grupo |
+| `remove_group` | Remove grupo |
+| `query_history` | Histórico de envios |
+| `save_note` | Salva no vault |
+| `search_vault` | Busca no vault |
+
+## Repositório
+`C:\Users\Hermes\projetos_dev\Assistente-Mercurio`
 
 ## Status
 Em desenvolvimento ativo.

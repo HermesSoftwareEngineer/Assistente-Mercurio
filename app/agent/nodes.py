@@ -32,6 +32,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 MODEL = "deepseek-v4-flash"
+
+_OWNER_PHONE = "".join(c for c in os.environ.get("AUTHORIZED_NUMBER", "") if c.isdigit())
+
+OWNER_INTENTS = {"generate", "send", "approve", "manage_groups", "history", "update_context", "add_task"}
 _llm: OpenAI | None = None
 
 
@@ -233,9 +237,16 @@ Retorne JSON:
         logger.error(f"classify_intent error: {e}")
         parsed = {}
 
+    intent = parsed.get("intent", "unknown")
+
+    # Non-owners can only get conversational responses
+    caller = "".join(c for c in state["phone"] if c.isdigit())
+    if _OWNER_PHONE and caller != _OWNER_PHONE and intent in OWNER_INTENTS:
+        intent = "unknown"
+
     new_groups = parsed.get("target_groups") or []
     return {
-        "intent": parsed.get("intent", "unknown"),
+        "intent": intent,
         "send_direct": bool(parsed.get("send_direct", False)),
         "target_groups": new_groups if new_groups else existing_groups,
         "classification": parsed,
@@ -368,6 +379,16 @@ def query_history(state: "AgentState") -> dict:
 def handle_unknown(state: "AgentState") -> dict:
     context = state.get("memory_context", "")
     user_msg = state["user_message"]
+    caller = "".join(c for c in state["phone"] if c.isdigit())
+    is_owner = bool(_OWNER_PHONE and caller == _OWNER_PHONE)
+
+    caller_note = (
+        "Você está conversando com o próprio Hermes."
+        if is_owner
+        else f"Você está conversando com outra pessoa (número: +{caller}). Responda representando o Hermes, sem executar ações administrativas."
+    )
+
+    system = CONVERSATIONAL_SYSTEM_PROMPT + f"\n\n{caller_note}"
 
     prompt = (
         f"Contexto do vault:\n{context}\n\n---\nMensagem: {user_msg}"
@@ -375,5 +396,5 @@ def handle_unknown(state: "AgentState") -> dict:
         else user_msg
     )
 
-    response = _chat(CONVERSATIONAL_SYSTEM_PROMPT, prompt)
+    response = _chat(system, prompt)
     return {"response": response}

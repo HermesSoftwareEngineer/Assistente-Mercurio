@@ -63,6 +63,44 @@ def append_to_note(note_path: str, new_content: str, separator: str = "\n\n---\n
     return write_note(note_path, merged)
 
 
+def rename_note(old_path: str, new_path: str) -> bool:
+    """Rename or move a note within the vault."""
+    vault = _vault()
+    if vault is None:
+        return False
+    try:
+        src = vault / old_path
+        dst = vault / new_path
+        if not src.exists():
+            logger.warning(f"rename_note: source not found '{old_path}'")
+            return False
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        src.rename(dst)
+        logger.info(f"Vault note renamed: '{old_path}' → '{new_path}'")
+        return True
+    except Exception as e:
+        logger.error(f"rename_note '{old_path}' → '{new_path}': {e}")
+        return False
+
+
+def delete_note(note_path: str) -> bool:
+    """Delete a note from the vault."""
+    vault = _vault()
+    if vault is None:
+        return False
+    try:
+        target = vault / note_path
+        if not target.exists():
+            logger.warning(f"delete_note: not found '{note_path}'")
+            return False
+        target.unlink()
+        logger.info(f"Vault note deleted: {note_path}")
+        return True
+    except Exception as e:
+        logger.error(f"delete_note '{note_path}': {e}")
+        return False
+
+
 def list_notes(folder: str = "") -> list[str]:
     """Return relative paths of all .md files under folder (default: vault root)."""
     vault = _vault()

@@ -1,7 +1,8 @@
 import os
 import logging
 from datetime import datetime, timezone
-from supabase import create_client, Client
+import httpx
+from supabase import create_client, Client, ClientOptions
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,9 @@ def get_client() -> Client:
         key = os.environ.get("SUPABASE_KEY", "")
         if not url or not key:
             raise ValueError("SUPABASE_URL and SUPABASE_KEY must be set")
-        _client = create_client(url, key)
+        verify_ssl = os.environ.get("DISABLE_SSL", "").lower() != "true"
+        options = ClientOptions(httpx_client=httpx.Client(verify=verify_ssl))
+        _client = create_client(url, key, options=options)
     return _client
 
 
@@ -104,3 +107,103 @@ def get_message_history(limit: int = 5) -> list[dict]:
     except Exception as e:
         logger.error(f"Error fetching history: {e}")
         return []
+
+
+def get_contacts() -> list[dict]:
+    try:
+        return (
+            get_client()
+            .table("authorized_contacts")
+            .select("number, name")
+            .order("created_at")
+            .execute()
+            .data
+            or []
+        )
+    except Exception as e:
+        logger.error(f"Error fetching contacts: {e}")
+        return []
+
+
+def add_contact(number: str, name: str = "") -> bool:
+    try:
+        get_client().table("authorized_contacts").upsert(
+            {"number": number, "name": name}, on_conflict="number"
+        ).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Error adding contact '{number}': {e}")
+        return False
+
+
+def remove_contact(number: str) -> bool:
+    try:
+        get_client().table("authorized_contacts").delete().eq("number", number).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Error removing contact '{number}': {e}")
+        return False
+
+
+def save_conversation_history(phone: str, messages: list[dict], session_id: str) -> bool:
+    try:
+        get_client().table("conversation_history").upsert(
+            {
+                "phone": phone,
+                "messages": messages,
+                "session_id": session_id,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            on_conflict="phone",
+        ).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Error saving history for {phone}: {e}")
+        return False
+
+
+def load_conversation_history(phone: str) -> tuple[list[dict], str]:
+    """Returns (messages, session_id). session_id is '' when no history exists."""
+    try:
+        result = (
+            get_client()
+            .table("conversation_history")
+            .select("messages, session_id")
+            .eq("phone", phone)
+            .limit(1)
+            .execute()
+        )
+        if result.data:
+            row = result.data[0]
+            return row["messages"], row.get("session_id", "")
+        return [], ""
+    except Exception as e:
+        logger.error(f"Error loading history for {phone}: {e}")
+        return [], ""
+
+
+def delete_conversation_history(phone: str) -> bool:
+    try:
+        get_client().table("conversation_history").delete().eq("phone", phone).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Error deleting history for {phone}: {e}")
+        return False
+
+
+def get_setting(key: str, default: str = "") -> str:
+    try:
+        result = get_client().table("app_settings").select("value").eq("key", key).limit(1).execute()
+        return result.data[0]["value"] if result.data else default
+    except Exception as e:
+        logger.error(f"Error fetching setting '{key}': {e}")
+        return default
+
+
+def set_setting(key: str, value: str) -> bool:
+    try:
+        get_client().table("app_settings").upsert({"key": key, "value": value}, on_conflict="key").execute()
+        return True
+    except Exception as e:
+        logger.error(f"Error saving setting '{key}': {e}")
+        return False

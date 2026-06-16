@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mercúrio — Admin</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    header h1 { font-size: 18px; font-weight: 600; letter-spacing: .5px; }
+    header span { font-size: 12px; color: #8888aa; }
+
+    #btn-logout {
+      display: none;
+      background: transparent;
+      border: 1px solid #444466;
+      color: #aaaacc;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: border-color .2s, color .2s;
+    }
+    #btn-logout:hover { border-color: #e74c3c; color: #e74c3c; }
+
+    main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 16px rgba(0,0,0,.08);
+      padding: 36px 32px;
+      width: 100%;
+      max-width: 440px;
+    }
+
+    .card h2 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 24px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 6px;
+    }
+
+    input[type="password"],
+    input[type="text"] {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    input:focus { border-color: #5c6bc0; }
+
+    .btn-primary {
+      width: 100%;
+      margin-top: 20px;
+      padding: 11px;
+      background: #1a1a2e;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .btn-primary:hover { background: #2d2d5a; }
+    .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+
+    .error-msg {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #e74c3c;
+      text-align: center;
+      min-height: 18px;
+    }
+
+    /* Painel */
+    #panel { display: none; width: 100%; max-width: 540px; }
+
+    .panel-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 16px rgba(0,0,0,.08);
+      padding: 28px 28px;
+    }
+
+    .panel-card h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 20px;
+    }
+
+    /* Toggle allow_all */
+    .allow-all-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #f7f8fc;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 20px;
+      gap: 12px;
+    }
+
+    .allow-all-row .label-group { flex: 1; }
+    .allow-all-row .label-group strong {
+      display: block;
+      font-size: 14px;
+      color: #1a1a2e;
+      font-weight: 600;
+    }
+    .allow-all-row .label-group span {
+      font-size: 12px;
+      color: #888;
+    }
+
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: #ccc;
+      border-radius: 24px;
+      cursor: pointer;
+      transition: background .25s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px; height: 18px;
+      left: 3px; bottom: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform .25s;
+    }
+    .toggle input:checked + .toggle-slider { background: #27ae60; }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+    /* Add form */
+    .add-form {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .add-form input[type="text"] { flex: 1; min-width: 120px; margin: 0; }
+    .add-form input.input-name { max-width: 160px; }
+    .add-form button {
+      padding: 10px 18px;
+      background: #1a1a2e;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .2s;
+    }
+    .add-form button:hover { background: #2d2d5a; }
+
+    #numbers-list { list-style: none; }
+
+    #numbers-list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: #f7f8fc;
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: #333;
+      gap: 8px;
+    }
+
+    #numbers-list li .contact-info { flex: 1; min-width: 0; }
+    #numbers-list li .contact-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #1a1a2e;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #numbers-list li .contact-name.unnamed { color: #aaa; font-weight: 400; font-style: italic; }
+    #numbers-list li .num { font-family: monospace; font-size: 13px; color: #666; }
+
+    #numbers-list li button {
+      background: transparent;
+      border: none;
+      color: #bbb;
+      font-size: 18px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: color .2s, background .2s;
+      flex-shrink: 0;
+    }
+    #numbers-list li button:hover { color: #e74c3c; background: #fdecea; }
+
+    .empty-state {
+      text-align: center;
+      color: #aaa;
+      font-size: 13px;
+      padding: 24px 0;
+    }
+
+    .contacts-section { transition: opacity .2s; }
+    .contacts-section.dimmed { opacity: .4; pointer-events: none; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>☿ Mercúrio</h1>
+  <button id="btn-logout" onclick="logout()">Sair</button>
+</header>
+
+<main>
+
+  <!-- Login -->
+  <div class="card" id="login-card">
+    <h2>Acesso ao painel</h2>
+    <label for="api-key">Chave de acesso</label>
+    <input type="password" id="api-key" placeholder="Evolution API Key" autocomplete="current-password" />
+    <div class="error-msg" id="login-error"></div>
+    <button class="btn-primary" onclick="doLogin()">Entrar</button>
+  </div>
+
+  <!-- Painel -->
+  <div id="panel">
+    <div class="panel-card">
+      <h2>Números autorizados</h2>
+
+      <!-- Toggle allow_all -->
+      <div class="allow-all-row">
+        <div class="label-group">
+          <strong>Responder a todos os contatos</strong>
+          <span>Qualquer número pode conversar com o Mercúrio</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="allow-all-toggle" onchange="toggleAllowAll(this.checked)" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <!-- Formulário de adição -->
+      <div class="contacts-section" id="contacts-section">
+        <div class="add-form">
+          <input type="text" id="new-name" class="input-name" placeholder="Nome (opcional)"
+                 onkeydown="if(event.key==='Enter') addContact()" />
+          <input type="text" id="new-number" placeholder="5585999998888" maxlength="20"
+                 onkeydown="if(event.key==='Enter') addContact()" />
+          <button onclick="addContact()">Adicionar</button>
+        </div>
+        <ul id="numbers-list"></ul>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  async function doLogin() {
+    const key = document.getElementById('api-key').value.trim();
+    const errEl = document.getElementById('login-error');
+    errEl.textContent = '';
+    if (!key) { errEl.textContent = 'Informe a chave.'; return; }
+
+    const res = await fetch('/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }),
+    });
+
+    if (res.ok) {
+      showPanel();
+    } else {
+      const data = await res.json();
+      errEl.textContent = data.error || 'Erro ao autenticar.';
+    }
+  }
+
+  async function logout() {
+    await fetch('/admin/logout', { method: 'POST' });
+    document.getElementById('panel').style.display = 'none';
+    document.getElementById('login-card').style.display = 'block';
+    document.getElementById('btn-logout').style.display = 'none';
+    document.getElementById('api-key').value = '';
+  }
+
+  async function showPanel() {
+    document.getElementById('login-card').style.display = 'none';
+    document.getElementById('panel').style.display = 'block';
+    document.getElementById('btn-logout').style.display = 'block';
+    await loadNumbers();
+  }
+
+  async function loadNumbers() {
+    const res = await fetch('/admin/numbers');
+    if (!res.ok) return;
+    const data = await res.json();
+    applyState(data);
+  }
+
+  function applyState({ contacts, allow_all }) {
+    document.getElementById('allow-all-toggle').checked = allow_all;
+    document.getElementById('contacts-section').classList.toggle('dimmed', allow_all);
+    renderContacts(contacts);
+  }
+
+  function renderContacts(contacts) {
+    const list = document.getElementById('numbers-list');
+    list.innerHTML = '';
+    if (!contacts.length) {
+      list.innerHTML = '<li class="empty-state" style="display:block">Nenhum número cadastrado.</li>';
+      return;
+    }
+    contacts.forEach(({ number, name }) => {
+      const li = document.createElement('li');
+      const displayName = name
+        ? `<div class="contact-name">${escHtml(name)}</div>`
+        : `<div class="contact-name unnamed">Sem nome</div>`;
+      li.innerHTML = `
+        <div class="contact-info">
+          ${displayName}
+          <div class="num">+${escHtml(number)}</div>
+        </div>
+        <button onclick="removeContact('${escHtml(number)}')" title="Remover">×</button>
+      `;
+      list.appendChild(li);
+    });
+  }
+
+  async function addContact() {
+    const nameInput = document.getElementById('new-name');
+    const numInput = document.getElementById('new-number');
+    const number = numInput.value.trim();
+    const name = nameInput.value.trim();
+    if (!number) return;
+
+    const res = await fetch('/admin/numbers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ number, name }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      applyState(data);
+      numInput.value = '';
+      nameInput.value = '';
+      numInput.focus();
+    } else {
+      const data = await res.json();
+      alert(data.error || 'Erro ao adicionar número.');
+    }
+  }
+
+  async function removeContact(number) {
+    const res = await fetch(`/admin/numbers/${number}`, { method: 'DELETE' });
+    if (res.ok) {
+      const data = await res.json();
+      applyState(data);
+    }
+  }
+
+  async function toggleAllowAll(checked) {
+    const res = await fetch('/admin/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ allow_all: checked }),
+    });
+    if (res.ok) {
+      document.getElementById('contacts-section').classList.toggle('dimmed', checked);
+    }
+  }
+
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // Ao carregar, verifica se já está autenticado
+  (async () => {
+    const res = await fetch('/admin/numbers');
+    if (res.ok) showPanel();
+  })();
+
+  document.getElementById('api-key').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+</script>
+
+</body>
+</html>
