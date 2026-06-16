@@ -312,3 +312,59 @@ ngrok http 5000
 ```
 
 Use a URL gerada pelo ngrok como webhook na Evolution API.
+
+---
+
+## Docker
+
+O projeto roda como um container isolado. Há dois modos de deploy.
+
+### Rodar local (conectado ao Olimpo)
+
+O Nginx do Olimpo roteia `/mercurio/` para o container via rede interna Docker.
+
+1. Garanta que o Olimpo está rodando:
+   ```bash
+   # no diretório olimpo/
+   docker compose up -d
+   ```
+
+2. Adicione ao `nginx.conf` do Olimpo:
+   ```nginx
+   location /mercurio/ {
+       proxy_pass http://mercurio:5000/;
+   }
+   ```
+
+3. Suba o Mercúrio com a extensão de rede:
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.olimpo.yml up -d --build
+   ```
+
+### Rodar em VPS (independente)
+
+1. Copie o repositório e configure o `.env`:
+   ```bash
+   cp .env.example .env
+   # Edite .env: ajuste WEBHOOK_URL para a URL pública da VPS
+   ```
+
+2. Suba com o compose base:
+   ```bash
+   docker compose up -d --build
+   ```
+
+A porta `5000` ficará exposta diretamente. Configure seu proxy reverso (Nginx/Caddy) ou abra a porta no firewall conforme necessário.
+
+### Variáveis obrigatórias para Docker
+
+| Variável | Descrição |
+|---|---|
+| `EVOLUTION_API_URL` | URL da Evolution API (ex: `http://evolution-api:8080`) |
+| `EVOLUTION_API_KEY` | Chave da Evolution API |
+| `EVOLUTION_INSTANCE` | Nome da instância WhatsApp |
+| `WEBHOOK_URL` | URL pública deste bot (ex: `https://dominio.com/webhook/whatsapp`) |
+| `DEEPSEEK_API_KEY` | Chave do DeepSeek |
+| `SUPABASE_URL` / `SUPABASE_KEY` | Credenciais do Supabase |
+
+> Ao iniciar, `startup.py` registra automaticamente o webhook na Evolution API antes de subir o Flask.

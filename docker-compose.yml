@@ -1,13 +1,14 @@
 version: '3.8'
 
 services:
-  whatsapp-agent:
+  mercurio:
     build: .
-    container_name: whatsapp-agent
+    container_name: mercurio
     ports:
       - "5000:5000"
     env_file:
       - .env
-    restart: unless-stopped
+    restart: always
     volumes:
-      - ./logs:/app/logs
+      - ./vault:/app/vault
+      - ./biblioteca:/app/biblioteca

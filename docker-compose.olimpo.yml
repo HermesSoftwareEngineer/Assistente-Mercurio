@@ -1,0 +1,17 @@
+version: '3.8'
+
+# Extensão para rodar junto ao Olimpo (desenvolvimento local).
+# Aplique com: docker compose -f docker-compose.yml -f docker-compose.olimpo.yml up -d
+# O Nginx do Olimpo roteia /mercurio/ → http://mercurio:5000/
+
+services:
+  mercurio:
+    networks:
+      - default
+      - olimpo-net
+
+networks:
+  default: {}
+  olimpo-net:
+    external: true
+    name: olimpo-net
