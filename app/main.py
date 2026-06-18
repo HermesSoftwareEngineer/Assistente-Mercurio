@@ -72,7 +72,13 @@ def _fetch_all_messages() -> list[dict]:
         data = resp.json()
         if isinstance(data, list):
             return data
-        return data.get("messages", data.get("records", []))
+        if isinstance(data, dict):
+            for key in ("messages", "records", "data", "items"):
+                val = data.get(key)
+                if isinstance(val, list):
+                    return val
+        logger.warning(f"startup_polling: unexpected response structure: {type(data)} keys={list(data.keys()) if isinstance(data, dict) else 'n/a'}")
+        return []
     except Exception as e:
         logger.error(f"startup_polling: failed to fetch messages: {e}")
         return []
