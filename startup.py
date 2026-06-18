@@ -25,29 +25,6 @@ def register_webhook() -> None:
 
     headers = {"apikey": api_key, "Content-Type": "application/json"}
 
-    # Verifica se a instância existe; cria se não existir
-    try:
-        resp = requests.get(
-            f"{base_url}/instance/{instance}/connectionState",
-            headers=headers,
-            timeout=10,
-        )
-        data = resp.json() if resp.ok else {}
-        if resp.status_code == 404 or not data.get("state"):
-            logger.info(f"register_webhook: instância '{instance}' não encontrada — criando...")
-            create = requests.post(
-                f"{base_url}/instance/create",
-                headers=headers,
-                json={"instanceName": instance, "qrcode": True},
-                timeout=10,
-            )
-            create.raise_for_status()
-            logger.info(f"register_webhook: instância '{instance}' criada")
-        else:
-            logger.info(f"register_webhook: instância '{instance}' já existe (state={data.get('state')})")
-    except requests.RequestException as e:
-        logger.error(f"register_webhook: erro ao verificar/criar instância: {e}")
-
     # Registra o webhook
     try:
         resp = requests.put(

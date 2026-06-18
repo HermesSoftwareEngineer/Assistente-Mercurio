@@ -87,13 +87,7 @@ def startup_polling() -> None:
     _save_startup_timestamp(now)
 
     if last_restart == 0.0:
-        # First run — save timestamp only; no prior window to replay.
         logger.info("startup_polling: no previous restart timestamp found — skipping replay")
-        return
-
-    phone = "".join(c for c in _AUTHORIZED_NUMBER if c.isdigit())
-    if not phone:
-        logger.warning("startup_polling: AUTHORIZED_NUMBER not set — skipping")
         return
 
     messages = _fetch_all_messages()
@@ -103,38 +97,42 @@ def startup_polling() -> None:
 
     messages.sort(key=lambda m: m.get("messageTimestamp", 0))
 
-    # Separate user messages (from owner, after last restart) and bot messages
-    owner_msgs = [
+    # Index manual/bot replies by remoteJid so we can check per sender
+    bot_replies: dict[str, list[float]] = {}
+    for m in messages:
+        if m.get("key", {}).get("fromMe"):
+            jid = m.get("key", {}).get("remoteJid", "")
+            if jid:
+                bot_replies.setdefault(jid, []).append(float(m.get("messageTimestamp", 0)))
+
+    # Incoming messages after last restart (individual chats only)
+    incoming = [
         m for m in messages
         if not m.get("key", {}).get("fromMe")
-        and "".join(c for c in m.get("key", {}).get("remoteJid", "").split("@")[0] if c.isdigit()) == phone
+        and "@g.us" not in m.get("key", {}).get("remoteJid", "")
         and m.get("messageTimestamp", 0) > last_restart
     ]
 
-    if not owner_msgs:
-        logger.info("startup_polling: no pending messages from owner after last restart")
+    if not incoming:
+        logger.info("startup_polling: no pending messages after last restart")
         return
 
-    bot_timestamps = sorted(
-        m.get("messageTimestamp", 0)
-        for m in messages
-        if m.get("key", {}).get("fromMe")
-    )
-
-    # Keep only messages that have no bot reply before the next owner message
-    pending: list[dict] = []
-    for i, msg in enumerate(owner_msgs):
-        ts = msg.get("messageTimestamp", 0)
-        next_ts = owner_msgs[i + 1].get("messageTimestamp", 0) if i + 1 < len(owner_msgs) else float("inf")
-        has_reply = any(ts < bt < next_ts for bt in bot_timestamps)
-        if not has_reply:
-            pending.append(msg)
+    # Skip if already replied to that sender (manually or by bot) after this message
+    pending = [
+        m for m in incoming
+        if not any(
+            bt > m.get("messageTimestamp", 0)
+            for bt in bot_replies.get(m.get("key", {}).get("remoteJid", ""), [])
+        )
+    ]
 
     if not pending:
-        logger.info("startup_polling: all owner messages already have bot replies")
+        logger.info("startup_polling: all messages already have replies")
         return
 
+    config = _load_config()
     logger.info(f"startup_polling: processing {len(pending)} pending message(s)")
+
     for msg in pending:
         message_obj = msg.get("message", {})
         text = (
@@ -144,7 +142,16 @@ def startup_polling() -> None:
         ).strip()
         if not text:
             continue
-        logger.info(f"startup_polling: replaying message: {text[:80]}")
+
+        jid = msg.get("key", {}).get("remoteJid", "")
+        phone = jid.split("@")[0]
+
+        if not config.get("allow_all"):
+            authorized = [_normalize(c["number"]) for c in config.get("contacts", [])]
+            if authorized and _normalize(phone) not in authorized:
+                continue
+
+        logger.info(f"startup_polling: replaying message from {phone}: {text[:80]}")
         try:
             response = run_agent(phone, text)
             if response:
