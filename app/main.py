@@ -67,7 +67,7 @@ def _fetch_all_messages() -> list[dict]:
         return []
     url = f"{_EVOLUTION_API_URL}/chat/findMessages/{_EVOLUTION_INSTANCE}"
     try:
-        resp = requests.get(url, headers={"apikey": _EVOLUTION_API_KEY}, timeout=30)
+        resp = requests.post(url, headers={"apikey": _EVOLUTION_API_KEY, "Content-Type": "application/json"}, json={}, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         if isinstance(data, list):
