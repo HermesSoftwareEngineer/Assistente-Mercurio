@@ -6,15 +6,35 @@ Todos os endpoints REST estão sob o prefixo `/api/`. A autenticação é basead
 
 ## Autenticação
 
-### `POST /admin/login`
-Inicia uma sessão autenticada.
+Todos os endpoints `/api/*` aceitam autenticação via **Bearer token** (recomendado para frontends) ou via sessão Flask (painel HTML admin).
 
+### Bearer token (frontend)
+
+Inclua o header em todas as requisições:
+
+```
+Authorization: Bearer <EVOLUTION_API_KEY>
+```
+
+A chave é o valor da variável de ambiente `EVOLUTION_API_KEY` definida no `.env`.
+
+### Sessão Flask (painel HTML)
+
+Para uso no painel admin web, faça login primeiro:
+
+#### `POST /admin/login`
 **Body:**
 ```json
 { "key": "<EVOLUTION_API_KEY>" }
 ```
+**Resposta:** `200 OK` com `{"ok": true}` ou `401` se a chave for inválida. O cookie de sessão é mantido automaticamente pelo browser.
 
-**Resposta:** `200 OK` com `{"ok": true}` ou `401` se a chave for inválida.
+---
+
+**Resposta de erro de autenticação:** `401 Unauthorized`
+```json
+{ "error": "Não autenticado" }
+```
 
 ---
 

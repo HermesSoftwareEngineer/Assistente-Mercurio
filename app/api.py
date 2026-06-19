@@ -1,4 +1,5 @@
 import logging
+import os
 from functools import wraps
 
 from flask import Blueprint, jsonify, request, session
@@ -32,9 +33,15 @@ api_bp = Blueprint("api", __name__)
 def _require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get("authenticated"):
-            return jsonify({"error": "Não autenticado"}), 401
-        return f(*args, **kwargs)
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth[7:]
+            expected = os.environ.get("EVOLUTION_API_KEY", "")
+            if token and token == expected:
+                return f(*args, **kwargs)
+        if session.get("authenticated"):
+            return f(*args, **kwargs)
+        return jsonify({"error": "Não autenticado"}), 401
     return decorated
 
 
