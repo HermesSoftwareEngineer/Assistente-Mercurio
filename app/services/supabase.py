@@ -114,7 +114,7 @@ def get_contacts() -> list[dict]:
         return (
             get_client()
             .table("authorized_contacts")
-            .select("number, name")
+            .select("id, number, name, active, created_at")
             .order("created_at")
             .execute()
             .data
@@ -123,6 +123,22 @@ def get_contacts() -> list[dict]:
     except Exception as e:
         logger.error(f"Error fetching contacts: {e}")
         return []
+
+
+def patch_contact(number: str, active: bool | None = None, name: str | None = None) -> bool:
+    try:
+        updates: dict = {}
+        if active is not None:
+            updates["active"] = active
+        if name is not None:
+            updates["name"] = name
+        if not updates:
+            return True
+        result = get_client().table("authorized_contacts").update(updates).eq("number", number).execute()
+        return bool(result.data)
+    except Exception as e:
+        logger.error(f"Error patching contact '{number}': {e}")
+        return False
 
 
 def add_contact(number: str, name: str = "") -> bool:
@@ -189,6 +205,134 @@ def delete_conversation_history(phone: str) -> bool:
     except Exception as e:
         logger.error(f"Error deleting history for {phone}: {e}")
         return False
+
+
+def get_all_settings() -> list[dict]:
+    try:
+        return get_client().table("app_settings").select("*").order("key").execute().data or []
+    except Exception as e:
+        logger.error(f"Error fetching settings: {e}")
+        return []
+
+
+def get_conversation_session(phone: str) -> dict | None:
+    try:
+        result = (
+            get_client()
+            .table("conversation_sessions")
+            .select("*")
+            .eq("phone", phone)
+            .limit(1)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+    except Exception as e:
+        logger.error(f"Error fetching session for {phone}: {e}")
+        return None
+
+
+def upsert_conversation_session(phone: str, mode: str, transferred_by: str = "agent") -> bool:
+    try:
+        payload: dict = {"phone": phone, "mode": mode, "handoff_msg_sent": mode == "human"}
+        if mode == "human":
+            payload["transferred_at"] = datetime.now(timezone.utc).isoformat()
+            payload["transferred_by"] = transferred_by
+        else:
+            payload["transferred_at"] = None
+            payload["transferred_by"] = None
+        get_client().table("conversation_sessions").upsert(payload, on_conflict="phone").execute()
+        return True
+    except Exception as e:
+        logger.error(f"Error upserting session for {phone}: {e}")
+        return False
+
+
+def list_conversation_sessions() -> list[dict]:
+    try:
+        return get_client().table("conversation_sessions").select("*").execute().data or []
+    except Exception as e:
+        logger.error(f"Error listing sessions: {e}")
+        return []
+
+
+def get_prompt(key: str) -> str:
+    """Returns prompt content from DB, or '' if not found (caller falls back to hardcoded)."""
+    try:
+        result = (
+            get_client()
+            .table("prompts")
+            .select("content")
+            .eq("key", key)
+            .limit(1)
+            .execute()
+        )
+        return result.data[0]["content"] if result.data else ""
+    except Exception as e:
+        logger.error(f"Error fetching prompt '{key}': {e}")
+        return ""
+
+
+def set_prompt(key: str, content: str) -> bool:
+    try:
+        get_client().table("prompts").upsert(
+            {"key": key, "content": content, "updated_at": datetime.now(timezone.utc).isoformat()},
+            on_conflict="key",
+        ).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Error saving prompt '{key}': {e}")
+        return False
+
+
+def get_all_prompts() -> list[dict]:
+    try:
+        return get_client().table("prompts").select("key, content, updated_at").order("key").execute().data or []
+    except Exception as e:
+        logger.error(f"Error fetching all prompts: {e}")
+        return []
+
+
+def list_conversations_summary() -> list[dict]:
+    """Returns one summary row per phone: name, message count, last message, mode."""
+    try:
+        histories = (
+            get_client()
+            .table("conversation_history")
+            .select("phone, messages, updated_at")
+            .order("updated_at", desc=True)
+            .execute()
+            .data or []
+        )
+        contacts_map = {c["number"]: c for c in get_contacts()}
+        sessions_map = {s["phone"]: s for s in list_conversation_sessions()}
+
+        result = []
+        for h in histories:
+            phone = h["phone"]
+            msgs: list = h.get("messages") or []
+            contact = contacts_map.get(phone, {})
+            sess = sessions_map.get(phone, {})
+
+            last_msg = ""
+            for m in reversed(msgs):
+                if m.get("content"):
+                    last_msg = m["content"][:120]
+                    break
+
+            result.append({
+                "phone": phone,
+                "name": contact.get("name", ""),
+                "message_count": len(msgs),
+                "last_message": last_msg,
+                "mode": sess.get("mode", "bot"),
+                "transferred_at": sess.get("transferred_at"),
+                "transferred_by": sess.get("transferred_by"),
+                "updated_at": h.get("updated_at"),
+            })
+        return result
+    except Exception as e:
+        logger.error(f"Error listing conversations summary: {e}")
+        return []
 
 
 def get_setting(key: str, default: str = "") -> str:

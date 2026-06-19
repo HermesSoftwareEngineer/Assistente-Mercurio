@@ -15,6 +15,7 @@ from app.agent.tools import TOOLS, TOOLS_NON_OWNER, execute_tool
 from app.services.obsidian import read_note
 from app.services.supabase import (
     delete_conversation_history,
+    get_prompt,
     load_conversation_history,
     save_conversation_history,
 )
@@ -145,7 +146,9 @@ def run_agent(phone: str, message: str) -> str:
     history.append({"role": "user", "content": message})
 
     vault_context = _load_vault_context() if is_owner else ""
-    messages = [{"role": "system", "content": build_system_prompt(is_owner, caller, vault_context, _OWNER_PHONE)}] + history
+    prompt_key = "owner" if is_owner else "non_owner"
+    custom_prompt = get_prompt(prompt_key)
+    messages = [{"role": "system", "content": build_system_prompt(is_owner, caller, vault_context, _OWNER_PHONE, custom_prompt)}] + history
 
     kwargs: dict = {"model": MODEL, "messages": messages}
     if is_owner:

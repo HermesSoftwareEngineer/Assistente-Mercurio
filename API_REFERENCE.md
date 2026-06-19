@@ -1,456 +1,312 @@
-# Mercúrio — API Reference
+# API Reference — Assistente Mercúrio
 
-> Base URL local: `http://localhost:5000`  
-> Autenticação: session cookie (`EVOLUTION_API_KEY` como senha). Endpoints marcados com 🔒 exigem login.
+Todos os endpoints REST estão sob o prefixo `/api/`. A autenticação é baseada em sessão Flask — é necessário fazer login via `/admin/login` antes de usar qualquer endpoint.
 
 ---
 
 ## Autenticação
 
-O painel admin usa **session cookie** (Flask). O fluxo é:
+### `POST /admin/login`
+Inicia uma sessão autenticada.
 
-1. `POST /admin/login` → recebe cookie de sessão
-2. Todas as rotas `🔒` enviam o cookie automaticamente
-3. `POST /admin/logout` → invalida a sessão
+**Body:**
+```json
+{ "key": "<EVOLUTION_API_KEY>" }
+```
 
-```
-Header de autenticação: cookie de sessão (gerenciado pelo browser/axios com withCredentials: true)
-Senha padrão: valor da env EVOLUTION_API_KEY (ex: "senha123")
-```
+**Resposta:** `200 OK` com `{"ok": true}` ou `401` se a chave for inválida.
 
 ---
 
-## Endpoints Existentes
+## Contatos (`/api/contacts`)
 
-### Sistema
+Gerencia a lista de contatos autorizados a conversar com o Mercúrio. O campo `active` permite desativar temporariamente um contato sem excluí-lo — contatos inativos são ignorados na autorização do webhook.
 
-#### `GET /health`
-Verifica se o servidor está no ar.
+### `GET /api/contacts`
+Lista todos os contatos (ativos e inativos).
 
-**Response 200**
-```json
-{ "status": "healthy" }
-```
-
----
-
-#### `POST /webhook/whatsapp`
-Recebe eventos da Evolution API (WhatsApp). **Não chamado pelo frontend** — uso exclusivo da Evolution API.
-
-**Request body** (enviado pela Evolution API)
-```json
-{
-  "event": "messages.upsert",
-  "instance": "Mercurio",
-  "data": {
-    "key": { "fromMe": false, "remoteJid": "5585999990001@s.whatsapp.net", "id": "MSG_ID" },
-    "pushName": "Nome do Usuário",
-    "message": { "conversation": "Texto da mensagem" },
-    "messageType": "conversation",
-    "messageTimestamp": 1718400000
-  }
-}
-```
-
-**Response 200**
-```json
-{ "status": "ok" }
-{ "status": "ignored" }
-{ "status": "unauthorized" }
-```
-
----
-
-### Admin — Autenticação
-
-#### `GET /admin/`
-Serve o HTML do painel admin (`templates/admin.html`).
-
-**Response 200** — página HTML
-
----
-
-#### `POST /admin/login`
-Autentica o usuário e inicia sessão.
-
-**Request body**
-```json
-{ "key": "senha123" }
-```
-
-**Response 200**
-```json
-{ "ok": true }
-```
-
-**Response 401**
-```json
-{ "error": "Chave inválida" }
-```
-
----
-
-#### `POST /admin/logout`
-Encerra a sessão atual.
-
-**Response 200**
-```json
-{ "ok": true }
-```
-
----
-
-### Admin — Contatos Autorizados
-
-#### 🔒 `GET /admin/numbers`
-Lista todos os contatos autorizados e o modo de acesso.
-
-**Response 200**
+**Resposta:**
 ```json
 {
   "contacts": [
-    { "number": "558596688778", "name": "Hermes" }
+    { "id": "uuid", "number": "5585999998888", "name": "João", "active": true, "created_at": "..." }
   ],
-  "allow_all": false
+  "count": 1
 }
 ```
 
----
+### `POST /api/contacts`
+Adiciona um novo contato autorizado.
 
-#### 🔒 `POST /admin/numbers`
-Adiciona um contato autorizado.
-
-**Request body**
+**Body:**
 ```json
-{ "number": "5585999990001", "name": "João" }
+{ "number": "5585999998888", "name": "João" }
 ```
 
-**Response 200** — retorna lista atualizada (igual ao GET)
+**Resposta:** `201 Created` com `{"ok": true, "number": "...", "name": "..."}`.
 
-**Response 400**
+### `DELETE /api/contacts/<number>`
+Remove permanentemente um contato. Para silenciar sem excluir, use `PATCH` com `active: false`.
+
+**Resposta:** `200 OK` com `{"ok": true}` ou `404` se não encontrado.
+
+### `PATCH /api/contacts/<number>`
+Atualiza `active` e/ou `name` de um contato.
+
+**Body** (ao menos um campo):
 ```json
-{ "error": "Número inválido" }
+{ "active": false }
+{ "name": "João Silva" }
+{ "active": true, "name": "João Silva" }
 ```
 
-**Response 500**
-```json
-{ "error": "Erro ao salvar no banco." }
-```
-
----
-
-#### 🔒 `DELETE /admin/numbers/<number>`
-Remove um contato autorizado.
-
-**Path param:** `number` — apenas dígitos (ex: `558596688778`)
-
-**Response 200** — retorna lista atualizada (igual ao GET)
+**Resposta:** `200 OK` com `{"ok": true}` ou `404` se não encontrado.
 
 ---
 
-### Admin — Configurações
+## Configurações (`/api/settings`)
 
-#### 🔒 `POST /admin/settings`
-Atualiza configurações do sistema.
+Chave/valor do sistema armazenado na tabela `app_settings`.
 
-**Request body**
+### `GET /api/settings`
+Retorna todas as configurações como objeto.
+
+**Resposta:**
+```json
+{ "settings": { "allow_all": "false" } }
+```
+
+### `PATCH /api/settings`
+Atualiza uma ou mais chaves. Booleanos são convertidos para `"true"`/`"false"`.
+
+**Body:**
 ```json
 { "allow_all": true }
 ```
 
-**Response 200**
+**Resposta:** `200 OK` com `{"ok": true}`.
+
+**Chaves conhecidas:**
+
+| Chave | Valores | Descrição |
+|---|---|---|
+| `allow_all` | `"true"` / `"false"` | Se `true`, qualquer número pode enviar mensagens, ignorando a lista de contatos |
+
+---
+
+## Conversas (`/api/conversations`)
+
+Acesso read-only ao histórico de conversas armazenado na tabela `conversation_history`.
+
+### `GET /api/conversations`
+Lista um resumo de todas as conversas existentes, ordenadas pela mais recente.
+
+**Resposta:**
 ```json
-{ "allow_all": true }
-```
-
----
-
-## Banco de Dados (Supabase)
-
-> URL: `https://ljyofbcfboluiqilszqu.supabase.co`  
-> Acesso via service key (backend) — o frontend **não** deve consultar o Supabase diretamente.
-
-### Tabelas
-
-#### `authorized_contacts`
-| Coluna | Tipo | Descrição |
-|--------|------|-----------|
-| `id` | uuid PK | |
-| `number` | text UNIQUE | Telefone só dígitos |
-| `name` | text | Nome do contato |
-| `created_at` | timestamptz | |
-
-#### `app_settings`
-| Coluna | Tipo | Descrição |
-|--------|------|-----------|
-| `key` | text PK | Ex: `"allow_all"` |
-| `value` | text | Ex: `"true"` / `"false"` |
-
-#### `groups`
-| Coluna | Tipo | Descrição |
-|--------|------|-----------|
-| `id` | uuid PK | |
-| `name` | text | Nome do grupo |
-| `jid` | text UNIQUE | Ex: `120363xxxxxx@g.us` |
-| `category` | text | Opcional |
-| `active` | boolean | |
-| `created_at` | timestamptz | |
-
-#### `messages`
-| Coluna | Tipo | Descrição |
-|--------|------|-----------|
-| `id` | uuid PK | |
-| `content` | text | Texto da mensagem enviada |
-| `groups_sent` | text[] | Nomes dos grupos destinatários |
-| `approved_by` | text | Telefone de quem aprovou |
-| `sent_at` | timestamptz | |
-
-#### `conversation_history`
-| Coluna | Tipo | Descrição |
-|--------|------|-----------|
-| `phone` | text PK | Telefone do usuário |
-| `messages` | jsonb | Array de `{role, content}` |
-| `session_id` | text | UUID da sessão atual |
-| `updated_at` | timestamptz | |
-
-#### `books`
-| Coluna | Tipo | Descrição |
-|--------|------|-----------|
-| `id` | uuid PK | |
-| `title` | text | Título do livro |
-| `filename` | text | Nome do arquivo PDF |
-| `pages` | int | |
-| `chunks` | int | Número de trechos indexados |
-| `added_at` | timestamptz | |
-
-#### `book_chunks`
-| Coluna | Tipo | Descrição |
-|--------|------|-----------|
-| `id` | uuid PK | |
-| `book_id` | uuid FK → books | |
-| `chunk_index` | int | Ordem do trecho |
-| `content` | text | Texto do trecho (~1 página) |
-| `embedding` | vector(768) | Vetor semântico |
-| `created_at` | timestamptz | |
-
-#### `processes`
-| Coluna | Tipo | Descrição |
-|--------|------|-----------|
-| `id` | uuid PK | |
-| `name` | text | Ex: `"coletar_roteiros"` |
-| `description` | text | |
-| `trigger_mode` | enum | `manual` \| `cron` |
-| `recurrence_cron` | text | Expressão cron (opcional) |
-| `parameters_schema` | jsonb | Schema dos parâmetros |
-| `steps` | jsonb | Array de steps |
-| `active` | boolean | |
-| `created_at` / `updated_at` | timestamptz | |
-
-#### `process_instances`
-| Coluna | Tipo | Descrição |
-|--------|------|-----------|
-| `id` | uuid PK | |
-| `process_id` | uuid FK → processes | Pode ser null (inline) |
-| `process_name` | text | Nome do processo |
-| `status` | enum | `in_progress` \| `done` \| `cancelled` \| `failed` |
-| `parameters` | jsonb | Parâmetros usados |
-| `notes` | text | |
-| `started_at` / `completed_at` | timestamptz | |
-
-#### `tasks`
-| Coluna | Tipo | Descrição |
-|--------|------|-----------|
-| `id` | uuid PK | |
-| `process_instance_id` | uuid FK → process_instances | Nullable (tarefa avulsa) |
-| `step_id` | text | Referência ao step no processo |
-| `title` | text | |
-| `type` | enum | Ver abaixo |
-| `status` | enum | Ver abaixo |
-| `due_at` | timestamptz | Prazo de execução |
-| `timing_type` | enum | `immediate` \| `after_hours` \| `at` |
-| `timing_value` | text | |
-| `depends_on` | jsonb | Array de UUIDs de tasks |
-| `on_delay` | enum | `notify` \| `proceed` \| `cascade` |
-| `payload` | jsonb | Dados específicos do tipo |
-| `contact_phone` | text | Telefone (para collect_from_contact) |
-| `notes` | text | Observações manuais |
-| `created_at` / `updated_at` / `completed_at` | timestamptz | |
-
----
-
-## Enums
-
-### `tasks.type`
-| Valor | Descrição |
-|-------|-----------|
-| `reminder` | Lembrete enviado a Hermes |
-| `notify_hermes` | Notificação ao Hermes |
-| `ask_hermes` | Pergunta que aguarda resposta de Hermes |
-| `send_message` | Envio para grupo(s) ou contato direto |
-| `collect_from_contact` | Envia mensagem e aguarda resposta de contato externo (com retry) |
-| `compile` | LLM compila respostas coletadas e gera texto final |
-| `wait` | Aguarda horário antes de prosseguir |
-
-### `tasks.status`
-| Valor | Descrição |
-|-------|-----------|
-| `blocked` | Aguardando `depends_on` serem concluídas |
-| `pending` | Pronta para execução, aguardando o scheduler |
-| `in_progress` | Sendo executada (ex: aguardando resposta de contato) |
-| `done` | Concluída com sucesso |
-| `missed` | Não executada a tempo (offline) |
-| `cancelled` | Cancelada manualmente |
-| `failed` | Falhou na execução |
-
-### `tasks.payload` por tipo
-```jsonc
-// reminder / notify_hermes
-{ "message": "Texto da notificação" }
-
-// send_message
 {
-  "content": "Texto ou vazio se veio de compile",
-  "target_type": "group" | "direct",
-  "targets": ["Nome do Grupo"],
-  "source_compile_task_id": "uuid"   // quando content vem de uma task compile
+  "conversations": [
+    {
+      "phone": "5585999998888",
+      "name": "João",
+      "message_count": 14,
+      "last_message": "Tudo bem, obrigado!",
+      "mode": "bot",
+      "transferred_at": null,
+      "transferred_by": null,
+      "updated_at": "2026-06-19T10:30:00Z"
+    }
+  ],
+  "count": 1
 }
+```
 
-// collect_from_contact
+**Campo `mode`:** `"bot"` (agente ativo) ou `"human"` (conversa em atendimento humano).
+
+### `GET /api/conversations/<phone>`
+Retorna o histórico completo de uma conversa.
+
+**Resposta:**
+```json
 {
-  "message": "Mensagem inicial ao contato",
-  "retry_message": "Mensagem de retry",
-  "retry_interval_hours": 2,
-  "max_retries": 2,
-  "retry_count": 0,
-  "contact_name": "João",
-  "response": "Texto respondido pelo contato"  // preenchido pelo agente ao receber resposta
+  "phone": "5585999998888",
+  "session_id": "abc123",
+  "mode": "bot",
+  "messages": [
+    { "role": "user", "content": "Olá" },
+    { "role": "assistant", "content": "Olá! Como posso ajudar?" }
+  ],
+  "count": 2
 }
+```
 
-// compile
+### `POST /api/conversations/<phone>/reset`
+Limpa o histórico de uma conversa e reinicia a sessão LangSmith.
+
+**Resposta:** `200 OK` com `{"ok": true, "phone": "..."}`.
+
+---
+
+## Sessões e Handoff (`/api/sessions`)
+
+Controla o modo de cada conversa: `"bot"` (agente responde automaticamente) ou `"human"` (agente silencia, Hermes responde diretamente pelo WhatsApp).
+
+**Fluxo de handoff:**
+1. O agente chama a tool `transfer_to_human` — ou o admin seta manualmente via `PATCH /api/sessions/<phone>/mode`
+2. O usuário recebe uma mensagem informando que será atendido por humano
+3. Hermes recebe notificação no WhatsApp com o número e o motivo
+4. Mensagens subsequentes do usuário são salvas no histórico mas **não processadas pelo agente**
+5. Quando Hermes termina, o admin clica "devolver ao bot" → `PATCH` com `{"mode": "bot"}`
+6. A próxima mensagem do usuário volta a ser processada pelo agente normalmente
+
+### `GET /api/sessions`
+Lista todas as sessões registradas com seu modo atual.
+
+**Resposta:**
+```json
 {
-  "instructions": "Monte o roteiro completo...",
-  "source_task_ids": ["uuid1", "uuid2"],
-  "event_name": "Culto de Domingo",
-  "result": "Texto compilado"  // preenchido pelo handler após execução
+  "sessions": [
+    {
+      "phone": "5585999998888",
+      "name": "João",
+      "mode": "human",
+      "transferred_at": "2026-06-19T10:00:00Z",
+      "transferred_by": "agent",
+      "handoff_msg_sent": true
+    }
+  ],
+  "count": 1
 }
+```
 
-// ask_hermes
-{ "question": "Pergunta a fazer ao Hermes" }
+**Campo `transferred_by`:** `"agent"` (tool chamada pelo LLM) ou `"admin"` (alterado manualmente via dashboard).
 
-// wait
-{ "reason": "Aguardando confirmação" }
+### `PATCH /api/sessions/<phone>/mode`
+Altera o modo de uma conversa. Use `"bot"` para devolver ao agente, `"human"` para assumir manualmente.
+
+**Body:**
+```json
+{ "mode": "bot" }
+```
+
+ou
+
+```json
+{ "mode": "human" }
+```
+
+**Resposta:** `200 OK` com `{"ok": true, "phone": "...", "mode": "..."}`.
+
+> Ao setar `"human"` via admin, o usuário **não** recebe mensagem automática (diferente da tool `transfer_to_human`). Para notificar o usuário, envie uma mensagem manualmente pelo WhatsApp.
+
+---
+
+## Prompts (`/api/prompts`)
+
+Prompts do agente editáveis e persistidos no banco. Sobrevivem a redeploys. Alterações entram em vigor na próxima mensagem processada — sem necessidade de reiniciar o servidor.
+
+Existem dois prompts:
+- `owner` — usado quando o número é o do Hermes (`AUTHORIZED_NUMBER`)
+- `non_owner` — usado para todos os outros contatos
+
+O prompt `non_owner` suporta dois placeholders substituídos em runtime:
+- `{caller}` — número de telefone do usuário atual
+- `{owner_phone}` — número do Hermes (de `AUTHORIZED_NUMBER`)
+
+As seções de formatação WhatsApp e regras de memória são **sempre** acrescentadas pelo código após o conteúdo editável — não é necessário repeti-las no prompt.
+
+### `GET /api/prompts`
+Retorna os dois prompts com conteúdo e data de atualização.
+
+**Resposta:**
+```json
+{
+  "prompts": [
+    { "key": "non_owner", "content": "Você é o Mercúrio...", "updated_at": "2026-06-19T..." },
+    { "key": "owner",     "content": "Você é o Mercúrio...", "updated_at": "2026-06-19T..." }
+  ]
+}
+```
+
+### `PUT /api/prompts/<key>`
+Substitui o conteúdo de um prompt. `key` deve ser `"owner"` ou `"non_owner"`.
+
+**Body:**
+```json
+{ "content": "Novo conteúdo do prompt..." }
+```
+
+**Resposta:** `200 OK` com `{"ok": true, "key": "..."}` ou `400` se o conteúdo for vazio.
+
+---
+
+## Grupos (`/api/groups`)
+
+### `GET /api/groups`
+Lista grupos. Por padrão retorna apenas grupos ativos.
+
+**Query params:** `active_only=false` para incluir inativos.
+
+**Resposta:**
+```json
+{
+  "groups": [
+    { "id": "uuid", "name": "Jovens", "jid": "120363...@g.us", "category": "Igreja", "active": true }
+  ]
+}
+```
+
+### `POST /api/groups`
+Cadastra um novo grupo.
+
+**Body:**
+```json
+{ "name": "Jovens", "jid": "120363xxxxxx@g.us", "category": "Igreja" }
+```
+
+**Resposta:** `201 Created`.
+
+### `DELETE /api/groups/<name>`
+Marca o grupo como inativo (soft delete).
+
+---
+
+## Mensagens Enviadas (`/api/messages`)
+
+Auditoria de mensagens enviadas pelo agente para grupos.
+
+### `GET /api/messages`
+**Query params:** `limit=20` (padrão).
+
+**Resposta:**
+```json
+{
+  "messages": [
+    { "content": "Aviso...", "groups_sent": ["Jovens"], "approved_by": "5585...", "sent_at": "..." }
+  ],
+  "count": 1
+}
 ```
 
 ---
 
-## Endpoints a Criar (para o Frontend)
+## Livros (`/api/books`)
 
-Os endpoints abaixo **não existem ainda** no Flask — são necessários para o painel React:
+### `GET /api/books`
+Lista livros indexados com título, páginas e número de trechos vetorizados.
 
-### Tarefas
-
-```
-🔒 GET    /api/tasks                     Lista tarefas (query: status, type, limit, offset)
-🔒 POST   /api/tasks                     Cria tarefa avulsa
-🔒 GET    /api/tasks/<id>                Detalhe de uma tarefa
-🔒 PATCH  /api/tasks/<id>               Atualiza status / payload / due_at / notes
-🔒 DELETE /api/tasks/<id>               Cancela tarefa (cascade via query param)
-```
-
-### Processos
-
-```
-🔒 GET    /api/processes                 Lista templates de processo
-🔒 POST   /api/processes/start          Inicia processo (inline: coletar_roteiros / template)
-🔒 GET    /api/process-instances         Lista instâncias de processo (query: status)
-🔒 GET    /api/process-instances/<id>   Detalhe + tasks vinculadas
-```
-
-### Grupos
-
-```
-🔒 GET    /api/groups                   Lista grupos (query: active_only)
-🔒 POST   /api/groups                   Cadastra grupo
-🔒 DELETE /api/groups/<name>            Remove grupo
-```
-
-### Histórico de Mensagens
-
-```
-🔒 GET    /api/messages                 Histórico de envios (query: limit)
-```
-
-### Biblioteca
-
-```
-🔒 GET    /api/books                    Lista livros indexados
-🔒 DELETE /api/books/<id>              Remove livro e chunks
-```
+### `DELETE /api/books/<book_id>`
+Remove um livro e todos os seus chunks do banco.
 
 ---
 
-## Payload Shapes (para o React)
+## Webhook
 
-### Task (criação)
-```typescript
-interface CreateTaskPayload {
-  title: string
-  type: 'reminder' | 'notify_hermes' | 'send_message' | 'wait' | 
-        'collect_from_contact' | 'ask_hermes' | 'compile'
-  payload: Record<string, unknown>
-  due_at?: string            // ISO 8601 com timezone
-  contact_phone?: string     // obrigatório para collect_from_contact
-}
-```
+### `POST /webhook/whatsapp`
+Recebe eventos da Evolution API. Não requer autenticação de sessão.
 
-### Task (resposta)
-```typescript
-interface Task {
-  id: string
-  process_instance_id: string | null
-  step_id: string | null
-  title: string
-  type: string
-  status: 'blocked' | 'pending' | 'in_progress' | 'done' | 'missed' | 'cancelled' | 'failed'
-  due_at: string | null
-  timing_type: string
-  depends_on: string[]
-  on_delay: string
-  payload: Record<string, unknown>
-  contact_phone: string | null
-  notes: string | null
-  created_at: string
-  updated_at: string
-  completed_at: string | null
-}
-```
+Eventos processados: `messages.upsert`, `message.received`.
 
-### Contact (admin)
-```typescript
-interface Contact {
-  number: string   // apenas dígitos
-  name: string
-}
-```
+Mensagens de grupos (`@g.us`) são ignoradas. O webhook verifica automaticamente se a conversa está em modo `"human"` — nesse caso, a mensagem é salva no histórico mas o agente não é acionado.
 
-### Group
-```typescript
-interface Group {
-  id: string
-  name: string
-  jid: string      // ex: 120363xxxxxx@g.us
-  category: string
-  active: boolean
-  created_at: string
-}
-```
-
----
-
-## Notas de Integração
-
-- **CORS**: Flask não tem CORS configurado — adicionar `flask-cors` antes de subir o frontend separado
-- **withCredentials**: obrigatório nas requests do axios para enviar o session cookie
-- **Fuso horário**: todos os timestamps são UTC (ISO 8601 com `+00:00`). O frontend deve converter para BRT (UTC-3)
-- **Paginação**: ainda não implementada — `limit` e `offset` a serem adicionados nos endpoints REST
-- **Scheduler**: roda a cada 60s em background thread — o frontend deve fazer polling ou usar Supabase Realtime para atualizações ao vivo
+### `GET /health`
+Health check. Retorna `{"status": "healthy"}`.

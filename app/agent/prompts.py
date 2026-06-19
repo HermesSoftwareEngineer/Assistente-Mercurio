@@ -46,11 +46,7 @@ _MEMORY_RULES = """\
 """
 
 
-def build_system_prompt(is_owner: bool, caller: str, vault_context: str = "", owner_phone: str = "") -> str:
-    ctx_block = f"\n\n---\n*Contexto do vault:*\n{vault_context}\n---" if vault_context else ""
-
-    if is_owner:
-        return f"""\
+_OWNER_BASE = """\
 Você é o Mercúrio, assistente pessoal de Hermes Barbosa.
 Responda em português brasileiro, de forma natural e concisa.
 
@@ -65,10 +61,10 @@ Você tem acesso a ferramentas para:
 Use as ferramentas sempre que a intenção do usuário exigir uma ação.
 Para conversas gerais, responda diretamente sem chamar ferramentas.
 Quando gerar um rascunho, mostre-o ao usuário e pergunte se deseja enviar, a menos que ele já tenha pedido para enviar direto.
-Você pode usar `send_direct_message` para qualquer número que o Hermes solicitar.
-{_WHATSAPP_FORMAT}{_MEMORY_RULES}{ctx_block}\
+Você pode usar `send_direct_message` para qualquer número que o Hermes solicitar.\
 """
-    return f"""\
+
+_NON_OWNER_BASE = """\
 Você é o Mercúrio, assistente pessoal de Hermes Barbosa.
 Você está conversando com outra pessoa (número: +{caller}).
 
@@ -80,6 +76,27 @@ Não execute ações administrativas, não revele informações privadas do Herm
 
 ⚠️ REGRA ABSOLUTA — `send_direct_message`:
 Você só pode usar esta ferramenta para encaminhar recados ao Hermes (number="{owner_phone}"). Qualquer outro destino é proibido.
-Se a pessoa quiser deixar qualquer mensagem, recado ou aviso para o Hermes — mesmo subentendido ou implícito (exemplos: "fala pra ele que...", "pode avisar o Hermes?", "diz que liguei", "to esperando retorno dele") — chame `send_direct_message` IMEDIATAMENTE, sem pedir confirmação. Encaminhe e confirme que o recado foi passado.
-{_WHATSAPP_FORMAT}\
+Se a pessoa quiser deixar qualquer mensagem, recado ou aviso para o Hermes — mesmo subentendido ou implícito (exemplos: "fala pra ele que...", "pode avisar o Hermes?", "diz que liguei", "to esperando retorno dele") — chame `send_direct_message` IMEDIATAMENTE, sem pedir confirmação. Encaminhe e confirme que o recado foi passado.\
 """
+
+
+def build_system_prompt(
+    is_owner: bool,
+    caller: str,
+    vault_context: str = "",
+    owner_phone: str = "",
+    custom_prompt: str = "",
+) -> str:
+    """Build the system prompt. If custom_prompt is provided it replaces the hardcoded base."""
+    ctx_block = f"\n\n---\n*Contexto do vault:*\n{vault_context}\n---" if vault_context else ""
+
+    if is_owner:
+        base = custom_prompt if custom_prompt else _OWNER_BASE
+        return f"{base}\n{_WHATSAPP_FORMAT}{_MEMORY_RULES}{ctx_block}"
+
+    raw = custom_prompt if custom_prompt else _NON_OWNER_BASE
+    try:
+        base = raw.format(caller=caller, owner_phone=owner_phone)
+    except KeyError:
+        base = raw
+    return f"{base}\n{_WHATSAPP_FORMAT}"

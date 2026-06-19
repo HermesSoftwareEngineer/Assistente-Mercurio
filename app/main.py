@@ -20,6 +20,7 @@ from app.services.books import book_exists, save_book
 from app.services.evolution import download_media_base64, send_message, send_presence
 from app.services.obsidian import read_note, write_note
 from app.services.pdf_processor import chunk_text, extract_text
+from app.services.supabase import get_conversation_session, load_conversation_history, save_conversation_history
 from app.services.transcribe import transcribe_audio
 
 _EVOLUTION_API_URL = os.environ.get("EVOLUTION_API_URL", "").rstrip("/")
@@ -153,7 +154,7 @@ def startup_polling() -> None:
         phone = jid.split("@")[0]
 
         if not config.get("allow_all"):
-            authorized = [_normalize(c["number"]) for c in config.get("contacts", [])]
+            authorized = [_normalize(c["number"]) for c in config.get("contacts", []) if c.get("active", True)]
             if authorized and _normalize(phone) not in authorized:
                 continue
 
@@ -238,7 +239,7 @@ def whatsapp_webhook():
 
     config = _load_config()
     if not config.get("allow_all"):
-        authorized = [_normalize(c["number"]) for c in config.get("contacts", [])]
+        authorized = [_normalize(c["number"]) for c in config.get("contacts", []) if c.get("active", True)]
         if authorized and _normalize(phone) not in authorized:
             logger.warning(f"Blocked unauthorized sender: {phone}")
             return jsonify({"status": "unauthorized"}), 200
@@ -288,6 +289,13 @@ def whatsapp_webhook():
     if text.strip() == "/reset":
         reset_session(phone)
         send_message(phone, "🔄 Conversa reiniciada!")
+        return jsonify({"status": "ok"}), 200
+
+    conv_session = get_conversation_session(phone)
+    if conv_session and conv_session.get("mode") == "human":
+        msgs, sid = load_conversation_history(phone)
+        msgs.append({"role": "user", "content": text})
+        save_conversation_history(phone, msgs, sid or "")
         return jsonify({"status": "ok"}), 200
 
     send_presence(phone, "composing")

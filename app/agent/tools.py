@@ -343,10 +343,35 @@ _ALL_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "transfer_to_human",
+            "description": (
+                "Transfere a conversa para atendimento humano direto com o Hermes. "
+                "Use quando não souber responder, a situação exigir julgamento pessoal, "
+                "ou o usuário pedir explicitamente para falar com uma pessoa."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "description": "Motivo interno da transferência (enviado ao Hermes como notificação).",
+                    },
+                    "message_to_user": {
+                        "type": "string",
+                        "description": "Mensagem enviada ao usuário confirmando a transferência. Deve ser cordial e informar que o Hermes entrará em contato.",
+                    },
+                },
+                "required": ["reason", "message_to_user"],
+            },
+        },
+    },
 ]
 
 TOOLS = _ALL_TOOLS
-TOOLS_NON_OWNER = [_tool("send_direct_message")]
+TOOLS_NON_OWNER = [_tool("send_direct_message"), _tool("transfer_to_human")]
 
 
 # ---------------------------------------------------------------------------
@@ -607,6 +632,19 @@ def _read_chat(phone: str, last_n: int | None = None) -> str:
     return "\n\n".join(lines) if lines else "Conversa sem mensagens de texto."
 
 
+def _transfer_to_human(reason: str, message_to_user: str, phone: str) -> str:
+    from app.services.supabase import upsert_conversation_session
+    owner_phone = "".join(c for c in os.environ.get("AUTHORIZED_NUMBER", "") if c.isdigit())
+    upsert_conversation_session(phone, mode="human", transferred_by="agent")
+    send_direct(phone, message_to_user)
+    if owner_phone and owner_phone != phone:
+        send_direct(
+            owner_phone,
+            f"📲 *Atendimento humano solicitado*\n*Contato:* +{phone}\n*Motivo:* {reason}",
+        )
+    return "Conversa transferida para atendimento humano. Usuário e Hermes notificados."
+
+
 
 # ---------------------------------------------------------------------------
 # Dispatcher
@@ -657,6 +695,8 @@ def execute_tool(name: str, args: dict, phone: str) -> str:
                 return _search_vault(args["query"])
             case "read_chat":
                 return _read_chat(args["phone"], args.get("last_n"))
+            case "transfer_to_human":
+                return _transfer_to_human(args["reason"], args["message_to_user"], phone)
             case _:
                 return f"Tool '{name}' não reconhecida."
     except Exception as e:
