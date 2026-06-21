@@ -28,6 +28,16 @@ logger = logging.getLogger(__name__)
 api_bp = Blueprint("api", __name__)
 
 
+@api_bp.route("/admin/login", methods=["POST"])
+def api_admin_login():
+    data = request.get_json() or {}
+    key = data.get("key", "")
+    if key and key == os.environ.get("EVOLUTION_API_KEY", ""):
+        session["authenticated"] = True
+        return jsonify({"ok": True})
+    return jsonify({"error": "Chave inválida"}), 401
+
+
 def _require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -246,6 +256,13 @@ _PROMPT_KEYS = {
     "prompt_proactive": "Heartbeat proativo",
 }
 
+_PROMPT_KEY_ALIASES = {
+    "draft": "prompt_draft",
+    "owner": "prompt_owner",
+    "non_owner": "prompt_non_owner",
+    "proactive": "prompt_proactive",
+}
+
 
 @api_bp.route("/prompts", methods=["GET"])
 @_require_auth
@@ -270,12 +287,13 @@ def list_prompts():
 @api_bp.route("/prompts/<key>", methods=["PUT"])
 @_require_auth
 def update_prompt(key):
+    key = _PROMPT_KEY_ALIASES.get(key, key)
     if key not in _PROMPT_KEYS:
         return jsonify({"error": f"Chave '{key}' inválida. Válidas: {list(_PROMPT_KEYS)}"}), 400
     data = request.get_json() or {}
-    value = data.get("value")
+    value = data.get("value") if data.get("value") is not None else data.get("content")
     if value is None:
-        return jsonify({"error": "'value' é obrigatório"}), 400
+        return jsonify({"error": "'value' ou 'content' é obrigatório"}), 400
     if not isinstance(value, str):
         return jsonify({"error": "'value' deve ser string"}), 400
     if not set_setting(key, value):
