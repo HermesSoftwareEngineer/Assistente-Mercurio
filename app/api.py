@@ -254,6 +254,7 @@ _PROMPT_KEYS = {
     "prompt_owner": "Agente — modo Hermes (owner)",
     "prompt_non_owner": "Agente — modo terceiros",
     "prompt_proactive": "Heartbeat proativo",
+    "prompt_triage": "Triagem de notas do vault",
 }
 
 _PROMPT_KEY_ALIASES = {
@@ -270,12 +271,14 @@ def list_prompts():
     from app.agent.prompts import (
         PROMPT_DRAFT_DEFAULT, PROMPT_OWNER_DEFAULT,
         PROMPT_NON_OWNER_DEFAULT, PROMPT_PROACTIVE_DEFAULT,
+        PROMPT_TRIAGE_DEFAULT,
     )
     defaults = {
         "prompt_draft": PROMPT_DRAFT_DEFAULT,
         "prompt_owner": PROMPT_OWNER_DEFAULT,
         "prompt_non_owner": PROMPT_NON_OWNER_DEFAULT,
         "prompt_proactive": PROMPT_PROACTIVE_DEFAULT,
+        "prompt_triage": PROMPT_TRIAGE_DEFAULT,
     }
     result = {}
     for key, label in _PROMPT_KEYS.items():
@@ -299,3 +302,129 @@ def update_prompt(key):
     if not set_setting(key, value):
         return jsonify({"error": "Erro ao salvar"}), 500
     return jsonify({"ok": True, "key": key})
+
+
+# ── Vault ─────────────────────────────────────────────────────────────────────
+
+@api_bp.route("/vault/index", methods=["GET"])
+@_require_auth
+def vault_index():
+    import re
+    from app.services.obsidian import read_note as _rn
+    content = _rn("07 - Mercurio/_index.md") or ""
+    entries = []
+    for line in content.splitlines():
+        m = re.match(r"- \[\[([^\]]+)\]\] — (.+?) \((.+?)\)", line)
+        if m:
+            entries.append({"name": m.group(1), "description": m.group(2), "path": m.group(3)})
+    return jsonify({"entries": entries, "raw": content})
+
+
+@api_bp.route("/vault/convencoes", methods=["GET"])
+@_require_auth
+def vault_get_convencoes():
+    from app.services.obsidian import read_note as _rn
+    content = _rn("07 - Mercurio/instrucoes/_Convenções.md") or ""
+    return jsonify({"content": content})
+
+
+@api_bp.route("/vault/convencoes", methods=["PUT"])
+@_require_auth
+def vault_save_convencoes():
+    from app.services.obsidian import write_note as _wn
+    data = request.get_json() or {}
+    content = data.get("content", "")
+    if not isinstance(content, str):
+        return jsonify({"error": "'content' deve ser string"}), 400
+    _wn("07 - Mercurio/instrucoes/_Convenções.md", content)
+    return jsonify({"ok": True})
+
+
+@api_bp.route("/vault/suggestions", methods=["GET"])
+@_require_auth
+def vault_suggestions():
+    import re
+    from app.services.obsidian import read_note as _rn
+    content = _rn("07 - Mercurio/organize_suggestions.md") or ""
+    phantom = [
+        {"link": m[0], "source": m[1]}
+        for m in re.findall(r"- `\[\[([^\]]+)\]\]` referenciado em `([^`]+)`", content)
+    ]
+    duplicates = [
+        {"a": m[0], "b": m[1]}
+        for m in re.findall(r"- `([^`]+)` e `([^`]+)` podem ser a mesma entidade", content)
+    ]
+    generated_at = None
+    for line in content.splitlines():
+        m = re.search(r"<!-- Gerado automaticamente — (\d{4}-\d{2}-\d{2}) -->", line)
+        if m:
+            generated_at = m.group(1)
+            break
+    return jsonify({
+        "phantom_links": phantom,
+        "potential_duplicates": duplicates,
+        "generated_at": generated_at,
+        "raw": content,
+    })
+
+
+@api_bp.route("/vault/apply-suggestion", methods=["POST"])
+@_require_auth
+def vault_apply_suggestion():
+    from app.services.obsidian import write_note as _wn, ensure_frontmatter, read_note as _rn
+    data = request.get_json() or {}
+    action = data.get("action")
+    if action == "create_note":
+        path = data.get("path", "")
+        if not path:
+            return jsonify({"error": "'path' é obrigatório para create_note"}), 400
+        content = ensure_frontmatter("", tipo="contexto")
+        _wn(path, content)
+        return jsonify({"ok": True, "path": path})
+    if action == "ignore":
+        return jsonify({"ok": True})
+    return jsonify({"error": f"Ação '{action}' inválida"}), 400
+
+
+# ── Scheduler ─────────────────────────────────────────────────────────────────
+
+@api_bp.route("/scheduler/jobs", methods=["GET"])
+@_require_auth
+def scheduler_get_jobs():
+    from app.agent.scheduler import get_jobs_status
+    jobs = get_jobs_status()
+    heartbeat_times = get_setting("heartbeat_times") or "08:00, 13:00, 18:00"
+    vault_poll_interval = get_setting("vault_poll_interval") or "5"
+    organize_memory_schedule = get_setting("organize_memory_schedule") or "mon 08:00"
+    organize_memory_enabled = get_setting("organize_memory_enabled") or "true"
+    return jsonify({
+        "jobs": jobs,
+        "config": {
+            "heartbeat_times": heartbeat_times,
+            "vault_poll_interval": vault_poll_interval,
+            "organize_memory_schedule": organize_memory_schedule,
+            "organize_memory_enabled": organize_memory_enabled,
+        },
+    })
+
+
+@api_bp.route("/scheduler/jobs", methods=["POST"])
+@_require_auth
+def scheduler_update_config():
+    from app.agent.scheduler import restart_scheduler
+    data = request.get_json() or {}
+    allowed = {"heartbeat_times", "vault_poll_interval", "organize_memory_schedule", "organize_memory_enabled"}
+    for key, value in data.items():
+        if key in allowed:
+            set_setting(key, str(value))
+    restart_scheduler()
+    return jsonify({"ok": True})
+
+
+@api_bp.route("/scheduler/run/<job_id>", methods=["POST"])
+@_require_auth
+def scheduler_run_job(job_id):
+    from app.agent.scheduler import trigger_job
+    if trigger_job(job_id):
+        return jsonify({"ok": True, "job": job_id})
+    return jsonify({"error": f"Job '{job_id}' não encontrado"}), 404

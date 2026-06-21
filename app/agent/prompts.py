@@ -119,10 +119,39 @@ Regras absolutas:
 - Se não houver nada urgente, registre brevemente no log e encerre.\
 """
 
+PROMPT_TRIAGE_DEFAULT = """\
+Você é um organizador de vault Obsidian. Analise o conteúdo e o índice abaixo e decida como salvar.
+
+Responda APENAS com JSON válido (sem markdown, sem explicação):
+{{
+  "action": "update" | "create" | "append",
+  "path": "caminho/relativo/nota.md",
+  "tipo": "pessoa" | "projeto" | "evento" | "grupo" | "contexto" | "tarefa" | "log",
+  "tags": ["tag1", "tag2"],
+  "description": "uma linha descrevendo a nota para o índice"
+}}
+
+- "update": informação sobre entidade que já tem nota no índice → atualize a nota existente
+- "create": entidade ou tópico novo → crie nota seguindo as convenções
+- "append": fato novo sobre área de contexto existente (ex: Hermes.md, Igreja.md) → adicione no final
+
+Convenções do vault:
+{conventions}
+
+Índice atual do vault:
+{index}
+
+Conteúdo a salvar:
+{content}
+
+Dica de contexto: {hint}\
+"""
+
 # Backward-compat aliases used by legacy nodes.py (dead code, never imported in prod)
 DRAFT_SYSTEM_PROMPT = PROMPT_DRAFT_DEFAULT
 CLASSIFY_SYSTEM_PROMPT = PROMPT_OWNER_DEFAULT
 CONVERSATIONAL_SYSTEM_PROMPT = PROMPT_OWNER_DEFAULT
+TRIAGE_SYSTEM_PROMPT = PROMPT_TRIAGE_DEFAULT
 
 # ---------------------------------------------------------------------------
 # DB loader
@@ -147,6 +176,17 @@ def _get_prompt(key: str, default: str) -> str:
 
 def get_draft_prompt() -> str:
     return _get_prompt("prompt_draft", PROMPT_DRAFT_DEFAULT)
+
+
+def get_triage_prompt(conventions: str, index: str, content: str, hint: str = "") -> str:
+    template = _get_prompt("prompt_triage", PROMPT_TRIAGE_DEFAULT)
+    return (
+        template
+        .replace("{conventions}", conventions)
+        .replace("{index}", index)
+        .replace("{content}", content)
+        .replace("{hint}", hint or "nenhuma")
+    )
 
 
 def get_proactive_prompt(hora: str, data: str, tarefas: str, log_hoje: str, regras: str) -> str:

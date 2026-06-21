@@ -9,6 +9,7 @@ for low-latency, zero-subprocess access during webhook processing.
 import logging
 import os
 from pathlib import Path
+from datetime import date as _date
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,48 @@ def list_notes(folder: str = "") -> list[str]:
     except Exception as e:
         logger.error(f"list_notes '{folder}': {e}")
         return []
+
+
+def ensure_frontmatter(content: str, tipo: str = "contexto", tags: list[str] | None = None) -> str:
+    """Add YAML frontmatter if absent, or update atualizado_em if present."""
+    today = _date.today().isoformat()
+    tags_str = ", ".join(tags or [])
+    if content.lstrip().startswith("---"):
+        lines = content.splitlines()
+        new_lines = []
+        for line in lines:
+            if line.startswith("atualizado_em:"):
+                new_lines.append(f"atualizado_em: {today}")
+            else:
+                new_lines.append(line)
+        return "\n".join(new_lines)
+    header = f"---\ntipo: {tipo}\ntags: [{tags_str}]\ncriado_em: {today}\natualizado_em: {today}\n---\n\n"
+    return header + content
+
+
+_INDEX_NOTE = "07 - Mercurio/_index.md"
+
+
+def update_vault_index(path: str, description: str = "", action: str = "add") -> None:
+    """Keep _index.md in sync when notes are created, renamed or deleted."""
+    try:
+        from pathlib import Path as _Path
+        stem = _Path(path).stem
+        link = f"[[{stem}]]"
+        index = read_note(_INDEX_NOTE) or "# Índice do Vault\n<!-- Mantido automaticamente -->\n\n## Notas\n"
+        if action == "remove":
+            lines = [l for l in index.splitlines() if path not in l and link not in l]
+            write_note(_INDEX_NOTE, "\n".join(lines))
+        elif action == "add":
+            if path not in index and link not in index:
+                entry = f"- {link} — {description or stem} ({path})"
+                if "## Notas" in index:
+                    index = index.rstrip() + f"\n{entry}\n"
+                else:
+                    index = index.rstrip() + f"\n\n## Notas\n{entry}\n"
+                write_note(_INDEX_NOTE, index)
+    except Exception as e:
+        logger.warning(f"update_vault_index: {e}")
 
 
 def search_notes(query: str, max_results: int = 3) -> list[dict]:

@@ -2,8 +2,9 @@
 APScheduler setup for Mercúrio's proactive execution.
 
 Two job types:
-  1. CronTrigger  — heartbeat at fixed times read from RegrasGerais.md
-  2. IntervalTrigger (5 min) — polls Tarefas.md for past-due ad-hoc tasks
+  1. CronTrigger  — heartbeat at fixed times read from app_settings (fallback: RegrasGerais.md)
+  2. IntervalTrigger — polls Tarefas.md for past-due ad-hoc tasks (interval from app_settings)
+  3. CronTrigger  — organize_memory weekly job (schedule from app_settings)
 """
 
 import logging
@@ -24,7 +25,17 @@ _DEFAULT_HEARTBEAT_TIMES = ["08:00", "13:00", "18:00"]
 
 
 def _parse_heartbeat_times() -> list[str]:
-    """Read heartbeat_times from RegrasGerais.md, fall back to defaults."""
+    """Read heartbeat_times from app_settings first, fall back to RegrasGerais.md."""
+    try:
+        from app.services.supabase import get_setting
+        val = get_setting("heartbeat_times")
+        if val:
+            times = [t.strip() for t in val.split(",") if re.match(r"^\d{2}:\d{2}$", t.strip())]
+            if times:
+                return times
+    except Exception:
+        pass
+    # fallback: RegrasGerais.md
     try:
         from app.services.obsidian import read_note
         content = read_note("mercurio/instrucoes/RegrasGerais.md")
@@ -37,6 +48,51 @@ def _parse_heartbeat_times() -> list[str]:
     except Exception as e:
         logger.warning(f"scheduler: could not parse heartbeat_times: {e}")
     return _DEFAULT_HEARTBEAT_TIMES
+
+
+def _get_poll_interval() -> int:
+    """Read vault_poll_interval (minutes) from app_settings, default 5."""
+    try:
+        from app.services.supabase import get_setting
+        val = get_setting("vault_poll_interval")
+        return int(val) if val and val.isdigit() else 5
+    except Exception:
+        return 5
+
+
+def _get_organize_memory_config() -> tuple[str, bool]:
+    """Return (schedule_str, enabled) for the organize_memory job."""
+    schedule = "mon 08:00"
+    enabled = True
+    try:
+        from app.services.supabase import get_setting
+        val_schedule = get_setting("organize_memory_schedule")
+        if val_schedule:
+            schedule = val_schedule.strip()
+        val_enabled = get_setting("organize_memory_enabled")
+        if val_enabled is not None:
+            enabled = val_enabled.strip().lower() not in ("false", "0", "no")
+    except Exception:
+        pass
+    return schedule, enabled
+
+
+def _parse_weekly_schedule(schedule_str: str) -> tuple[str, int, int]:
+    """Parse 'mon 08:00' → (day_of_week, hour, minute). Defaults to mon 08:00."""
+    _DAY_MAP = {
+        "mon": "mon", "tue": "tue", "wed": "wed", "thu": "thu",
+        "fri": "fri", "sat": "sat", "sun": "sun",
+        "seg": "mon", "ter": "tue", "qua": "wed", "qui": "thu",
+        "sex": "fri", "sab": "sat", "dom": "sun",
+    }
+    parts = schedule_str.strip().lower().split()
+    day = _DAY_MAP.get(parts[0], "mon") if parts else "mon"
+    time_part = parts[1] if len(parts) > 1 else "08:00"
+    try:
+        hour, minute = [int(x) for x in time_part.split(":")]
+    except (ValueError, IndexError):
+        hour, minute = 8, 0
+    return day, hour, minute
 
 
 def _heartbeat() -> None:
@@ -89,6 +145,15 @@ def _poll_vault_tasks() -> None:
         logger.error(f"scheduler: poll error: {e}", exc_info=True)
 
 
+def _organize_memory_job() -> None:
+    logger.info("scheduler: organize_memory triggered")
+    try:
+        from app.agent.proactive import organize_memory
+        organize_memory()
+    except Exception as e:
+        logger.error(f"scheduler: organize_memory error: {e}", exc_info=True)
+
+
 def start_scheduler() -> None:
     global _scheduler
     if _scheduler and _scheduler.running:
@@ -108,13 +173,27 @@ def start_scheduler() -> None:
         )
         logger.info(f"scheduler: heartbeat registered at {t}")
 
+    poll_interval = _get_poll_interval()
     _scheduler.add_job(
         _poll_vault_tasks,
-        IntervalTrigger(minutes=5, timezone=_TZ),
+        IntervalTrigger(minutes=poll_interval, timezone=_TZ),
         id="poll_vault_tasks",
         replace_existing=True,
     )
-    logger.info("scheduler: vault task poller registered (every 5 min)")
+    logger.info(f"scheduler: vault task poller registered (every {poll_interval} min)")
+
+    schedule_str, om_enabled = _get_organize_memory_config()
+    if om_enabled:
+        day, hour, minute = _parse_weekly_schedule(schedule_str)
+        _scheduler.add_job(
+            _organize_memory_job,
+            CronTrigger(day_of_week=day, hour=hour, minute=minute, timezone=_TZ),
+            id="organize_memory",
+            replace_existing=True,
+        )
+        logger.info(f"scheduler: organize_memory registered ({schedule_str})")
+    else:
+        logger.info("scheduler: organize_memory disabled via app_settings")
 
     _scheduler.start()
     logger.info("scheduler: started")
@@ -125,3 +204,37 @@ def stop_scheduler() -> None:
     if _scheduler and _scheduler.running:
         _scheduler.shutdown(wait=False)
         logger.info("scheduler: stopped")
+
+
+def get_jobs_status() -> list[dict]:
+    """Return status of all scheduler jobs."""
+    if not _scheduler or not _scheduler.running:
+        return []
+    result = []
+    for job in _scheduler.get_jobs():
+        result.append({
+            "id": job.id,
+            "next_run": job.next_run_time.isoformat() if job.next_run_time else None,
+        })
+    return result
+
+
+def trigger_job(job_id: str) -> bool:
+    """Trigger a job immediately in a background thread. Returns True if found."""
+    _JOB_FNS = {
+        "heartbeat": _heartbeat,
+        "poll_vault_tasks": _poll_vault_tasks,
+        "organize_memory": _organize_memory_job,
+    }
+    fn = _JOB_FNS.get(job_id)
+    if not fn:
+        return False
+    import threading
+    threading.Thread(target=fn, daemon=True).start()
+    return True
+
+
+def restart_scheduler() -> None:
+    """Stop and restart the scheduler to pick up new config from app_settings."""
+    stop_scheduler()
+    start_scheduler()

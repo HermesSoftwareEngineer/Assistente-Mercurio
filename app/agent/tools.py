@@ -346,6 +346,34 @@ _ALL_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "save_to_vault",
+            "description": (
+                "Salva informação no vault de forma inteligente — faz triagem automática para decidir "
+                "se deve atualizar nota existente, criar nota nova ou adicionar a nota de contexto existente. "
+                "Use este tool em vez de write_note para qualquer informação nova que o Hermes mencionar."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "Informação a salvar no vault.",
+                    },
+                    "hint": {
+                        "type": "string",
+                        "description": (
+                            "Dica de contexto para a triagem. Ex: 'contato novo: Pedro Silva', "
+                            "'evento de igreja', 'preferência do Hermes'. Quanto mais específico, melhor."
+                        ),
+                    },
+                },
+                "required": ["content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "transfer_to_human",
             "description": (
                 "Transfere a conversa para atendimento humano direto com o Hermes. "
@@ -762,6 +790,60 @@ def _schedule_task(
     return f"✅ Tarefa agendada: _{title}_ para {due_at}."
 
 
+def _save_to_vault(content: str, hint: str = "") -> str:
+    import json as _json
+    from app.agent.prompts import get_triage_prompt, PROMPT_TRIAGE_DEFAULT
+    from app.services.obsidian import (
+        ensure_frontmatter, read_note as _obs_read,
+        write_note as _obs_write, append_to_note as _obs_append,
+        update_vault_index,
+    )
+
+    conventions = _obs_read("07 - Mercurio/instrucoes/_Convenções.md") or ""
+    index = _obs_read("07 - Mercurio/_index.md") or ""
+
+    triage_prompt = get_triage_prompt(conventions, index, content, hint)
+
+    try:
+        resp = _get_llm().chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": triage_prompt}],
+            temperature=0,
+        )
+        raw = resp.choices[0].message.content.strip()
+        # Strip markdown code fences if present
+        if raw.startswith("```"):
+            raw = "\n".join(raw.splitlines()[1:])
+            raw = raw.rsplit("```", 1)[0].strip()
+        decision = _json.loads(raw)
+    except Exception as e:
+        logger.warning(f"save_to_vault: triage failed ({e}), falling back to append on Hermes.md")
+        _obs_append("00 - Contexto Pessoal/Hermes.md", content)
+        return f"⚠️ Triagem falhou, salvo em Hermes.md como fallback."
+
+    action = decision.get("action", "append")
+    path = decision.get("path", "00 - Contexto Pessoal/Hermes.md")
+    tipo = decision.get("tipo", "contexto")
+    tags = decision.get("tags", [])
+    description = decision.get("description", "")
+
+    if action == "create":
+        new_content = ensure_frontmatter(content, tipo=tipo, tags=tags)
+        _obs_write(path, new_content)
+        update_vault_index(path, description, action="add")
+        return f"✅ Nota criada: `{path}`"
+    elif action == "update":
+        existing = _obs_read(path) or ""
+        from datetime import date as _d
+        updated = ensure_frontmatter(existing, tipo=tipo, tags=tags)
+        updated = updated.rstrip() + f"\n\n**{_d.today().isoformat()}** — {content}\n"
+        _obs_write(path, updated)
+        return f"✅ Nota atualizada: `{path}`"
+    else:  # append
+        _obs_append(path, content)
+        return f"✅ Adicionado em: `{path}`"
+
+
 def _transfer_to_human(reason: str, message_to_user: str, phone: str) -> str:
     from app.services.supabase import upsert_conversation_session
     owner_phone = "".join(c for c in os.environ.get("AUTHORIZED_NUMBER", "") if c.isdigit())
@@ -825,6 +907,8 @@ def execute_tool(name: str, args: dict, phone: str) -> str:
                 return _search_vault(args["query"])
             case "read_chat":
                 return _read_chat(args["phone"], args.get("last_n"))
+            case "save_to_vault":
+                return _save_to_vault(args["content"], args.get("hint", ""))
             case "transfer_to_human":
                 return _transfer_to_human(args["reason"], args["message_to_user"], phone)
             case "read_note":

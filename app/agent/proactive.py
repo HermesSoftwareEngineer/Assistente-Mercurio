@@ -110,6 +110,72 @@ def vault_check() -> None:
                 return
 
 
+def organize_memory() -> None:
+    """Periodic vault maintenance: find phantom links and potential duplicates."""
+    import re
+    from pathlib import Path as _Path
+    from app.services.obsidian import list_notes, read_note as _read, write_note as _write
+
+    logger.info("organize_memory: starting")
+    all_notes = list_notes()
+    stems = {_Path(n).stem.lower(): n for n in all_notes}
+
+    phantom: list[dict] = []
+    duplicates: list[dict] = []
+
+    for note_path in all_notes:
+        content = _read(note_path) or ""
+        for link in re.findall(r'\[\[([^\]|#]+)\]\]', content):
+            link_clean = link.strip()
+            if link_clean.lower() not in stems:
+                phantom.append({"link": link_clean, "source": note_path})
+
+    note_names = list(stems.keys())
+    for i, name_a in enumerate(note_names):
+        for name_b in note_names[i + 1:]:
+            if len(name_a) > 3 and len(name_b) > 3:
+                if (name_a in name_b or name_b in name_a) and name_a != name_b:
+                    duplicates.append({"a": stems[name_a], "b": stems[name_b]})
+
+    today = _today()
+    lines = [
+        "# Sugestões de Organização",
+        f"<!-- Gerado automaticamente — {today} -->",
+        "",
+    ]
+    if phantom:
+        lines += ["## Links Fantasma", ""]
+        for item in phantom:
+            lines.append(f"- `[[{item['link']}]]` referenciado em `{item['source']}` — nota não existe")
+        lines.append("")
+    if duplicates:
+        lines += ["## Possíveis Duplicatas", ""]
+        for item in duplicates:
+            lines.append(f"- `{item['a']}` e `{item['b']}` podem ser a mesma entidade")
+        lines.append("")
+    if not phantom and not duplicates:
+        lines += ["## Tudo OK", "", f"Nenhuma inconsistência encontrada em {today}."]
+
+    _write("07 - Mercurio/organize_suggestions.md", "\n".join(lines))
+
+    summary_parts = []
+    if phantom:
+        summary_parts.append(f"{len(phantom)} link(s) fantasma")
+    if duplicates:
+        summary_parts.append(f"{len(duplicates)} possível(is) duplicata(s)")
+
+    if summary_parts and _OWNER_PHONE:
+        from app.services.evolution import send_message as _send
+        msg = (
+            f"🗂 *Revisão do vault concluída.*\n"
+            f"Encontrei: {', '.join(summary_parts)}.\n"
+            f"Veja as sugestões no painel admin."
+        )
+        _send(_OWNER_PHONE, msg)
+
+    logger.info(f"organize_memory: {len(phantom)} phantom links, {len(duplicates)} duplicates")
+
+
 def vault_check_with_response(phone: str, message: str) -> None:
     """Called when a contact replies to a task-related message.
 
