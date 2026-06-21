@@ -441,6 +441,15 @@ _ALL_TOOLS = [
                         "type": "string",
                         "description": "Telefone do contato a acionar (somente dígitos), se aplicável.",
                     },
+                    "context_links": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "Caminhos de notas do vault com contexto relevante para esta tarefa. "
+                            "Ex: ['06 - Igreja/Células.md', 'mercurio/Tarefas.md']. "
+                            "O agente proativo lerá esses arquivos antes de agir."
+                        ),
+                    },
                 },
                 "required": ["title", "due_at"],
             },
@@ -721,7 +730,13 @@ def _write_note(path: str, content: str) -> str:
     return f"Erro ao salvar nota '{path}'."
 
 
-def _schedule_task(title: str, due_at: str, details: str = "", contact_phone: str = "") -> str:
+def _schedule_task(
+    title: str,
+    due_at: str,
+    details: str = "",
+    contact_phone: str = "",
+    context_links: list[str] | None = None,
+) -> str:
     try:
         from datetime import datetime as _dt
         due = _dt.fromisoformat(due_at.replace("Z", "+00:00"))
@@ -739,6 +754,9 @@ def _schedule_task(title: str, due_at: str, details: str = "", contact_phone: st
         lines.append(f"- **contato:** {''.join(c for c in contact_phone if c.isdigit())}")
     if details:
         lines.append(f"- **detalhes:** {details}")
+    if context_links:
+        links_str = ", ".join(f"[[{p}]]" for p in context_links)
+        lines.append(f"- **contexto:** {links_str}")
 
     append_to_note("mercurio/Tarefas.md", "\n".join(lines), separator="\n")
     return f"✅ Tarefa agendada: _{title}_ para {due_at}."
@@ -819,6 +837,7 @@ def execute_tool(name: str, args: dict, phone: str) -> str:
                     args["due_at"],
                     args.get("details", ""),
                     args.get("contact_phone", ""),
+                    args.get("context_links"),
                 )
             case _:
                 return f"Tool '{name}' não reconhecida."

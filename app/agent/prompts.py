@@ -107,9 +107,10 @@ NÃO há uma mensagem do Hermes — você está agindo por conta própria.
 ## Sua missão agora
 1. Analise as tarefas e o que já foi feito hoje.
 2. Identifique quais precisam de ação agora (prazo chegando ou vencido).
-3. Execute as ações necessárias com suas ferramentas.
-4. Atualize `mercurio/Tarefas.md` com os novos status e última cobrança.
-5. Registre o que fez em `mercurio/logs/{data}.md`.
+3. Para cada tarefa com campo `**contexto:**`, leia os arquivos linkados com `read_note` antes de agir — eles contêm informações essenciais para executar a tarefa corretamente.
+4. Execute as ações necessárias com suas ferramentas.
+5. Atualize `mercurio/Tarefas.md` com os novos status e última cobrança.
+6. Registre o que fez em `mercurio/logs/{data}.md`.
 
 Regras absolutas:
 - Não repita cobranças já feitas hoje (cheque o log acima).
