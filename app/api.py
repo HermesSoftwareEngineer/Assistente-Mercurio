@@ -8,19 +8,17 @@ from app.services.supabase import (
     add_contact,
     add_group,
     delete_conversation_history,
-    get_all_prompts,
     get_all_settings,
     get_contacts,
     get_conversation_session,
     get_groups,
     get_message_history,
-    get_prompt,
+    get_setting,
     list_conversation_sessions,
     list_conversations_summary,
     patch_contact,
     remove_contact,
     remove_group,
-    set_prompt,
     set_setting,
     upsert_conversation_session,
 )
@@ -241,22 +239,45 @@ def set_session_mode(phone):
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
 
+_PROMPT_KEYS = {
+    "prompt_draft": "Geração de rascunhos WhatsApp",
+    "prompt_owner": "Agente — modo Hermes (owner)",
+    "prompt_non_owner": "Agente — modo terceiros",
+    "prompt_proactive": "Heartbeat proativo",
+}
+
+
 @api_bp.route("/prompts", methods=["GET"])
 @_require_auth
 def list_prompts():
-    prompts = get_all_prompts()
-    return jsonify({"prompts": prompts})
+    from app.agent.prompts import (
+        PROMPT_DRAFT_DEFAULT, PROMPT_OWNER_DEFAULT,
+        PROMPT_NON_OWNER_DEFAULT, PROMPT_PROACTIVE_DEFAULT,
+    )
+    defaults = {
+        "prompt_draft": PROMPT_DRAFT_DEFAULT,
+        "prompt_owner": PROMPT_OWNER_DEFAULT,
+        "prompt_non_owner": PROMPT_NON_OWNER_DEFAULT,
+        "prompt_proactive": PROMPT_PROACTIVE_DEFAULT,
+    }
+    result = {}
+    for key, label in _PROMPT_KEYS.items():
+        value = get_setting(key)
+        result[key] = {"label": label, "value": value or "", "default": defaults.get(key, "")}
+    return jsonify({"prompts": result})
 
 
 @api_bp.route("/prompts/<key>", methods=["PUT"])
 @_require_auth
 def update_prompt(key):
-    if key not in ("owner", "non_owner"):
-        return jsonify({"error": "key deve ser 'owner' ou 'non_owner'"}), 400
+    if key not in _PROMPT_KEYS:
+        return jsonify({"error": f"Chave '{key}' inválida. Válidas: {list(_PROMPT_KEYS)}"}), 400
     data = request.get_json() or {}
-    content = data.get("content", "").strip()
-    if not content:
-        return jsonify({"error": "content não pode ser vazio"}), 400
-    if not set_prompt(key, content):
-        return jsonify({"error": "Erro ao salvar prompt"}), 500
+    value = data.get("value")
+    if value is None:
+        return jsonify({"error": "'value' é obrigatório"}), 400
+    if not isinstance(value, str):
+        return jsonify({"error": "'value' deve ser string"}), 400
+    if not set_setting(key, value):
+        return jsonify({"error": "Erro ao salvar"}), 500
     return jsonify({"ok": True, "key": key})

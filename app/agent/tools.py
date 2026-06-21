@@ -9,10 +9,10 @@ from langsmith import traceable
 from langsmith.wrappers import wrap_openai
 from openai import OpenAI
 
-from app.agent.prompts import DRAFT_SYSTEM_PROMPT
+from app.agent.prompts import get_draft_prompt
 from app.services.evolution import send_group_message, send_message as send_direct
 from app.services.books import delete_book, delete_duplicate_books, list_books, search as search_books_db, save_book
-from app.services.obsidian import append_to_note, delete_note, rename_note, search_notes, write_note
+from app.services.obsidian import append_to_note, delete_note, read_note as _obsidian_read, rename_note, search_notes, write_note as _obsidian_write
 from app.services.pdf_processor import chunk_text, extract_text
 from app.services.supabase import (
     add_group,
@@ -368,6 +368,84 @@ _ALL_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_note",
+            "description": (
+                "Lê o conteúdo completo de uma nota do vault pelo caminho. "
+                "Use para ler mercurio/Tarefas.md, logs, instruções ou qualquer nota específica."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Caminho relativo ao vault. Ex: mercurio/Tarefas.md",
+                    }
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_note",
+            "description": (
+                "Cria ou sobrescreve uma nota no vault pelo caminho. "
+                "Use para atualizar mercurio/Tarefas.md, escrever logs do dia ou criar notas de instrução. "
+                "ATENÇÃO: sobrescreve o conteúdo anterior inteiramente — leia antes de editar partes específicas."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Caminho relativo ao vault. Ex: mercurio/logs/2026-06-19.md",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Conteúdo completo da nota.",
+                    },
+                },
+                "required": ["path", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "schedule_task",
+            "description": (
+                "Agenda uma tarefa pontual para um horário específico no vault. "
+                "Use quando o Hermes pedir para cobrar alguém, verificar algo ou executar uma ação num horário definido. "
+                "Só chame com horário preciso e futuro — se ambíguo ou no passado, pergunte antes."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Descrição curta da tarefa. Ex: Cobrar roteiro do Carlos",
+                    },
+                    "due_at": {
+                        "type": "string",
+                        "description": "Data e hora ISO 8601. Ex: 2026-06-19T19:00:00",
+                    },
+                    "details": {
+                        "type": "string",
+                        "description": "Detalhes: quem contatar, o que verificar, mensagem a enviar etc.",
+                    },
+                    "contact_phone": {
+                        "type": "string",
+                        "description": "Telefone do contato a acionar (somente dígitos), se aplicável.",
+                    },
+                },
+                "required": ["title", "due_at"],
+            },
+        },
+    },
 ]
 
 TOOLS = _ALL_TOOLS
@@ -382,7 +460,7 @@ def _generate_draft(instruction: str) -> str:
     resp = _get_llm().chat.completions.create(
         model=MODEL,
         messages=[
-            {"role": "system", "content": DRAFT_SYSTEM_PROMPT},
+            {"role": "system", "content": get_draft_prompt()},
             {"role": "user", "content": instruction},
         ],
         temperature=0.7,
@@ -632,6 +710,40 @@ def _read_chat(phone: str, last_n: int | None = None) -> str:
     return "\n\n".join(lines) if lines else "Conversa sem mensagens de texto."
 
 
+def _read_note(path: str) -> str:
+    content = _obsidian_read(path)
+    return content if content else f"(nota '{path}' não encontrada)"
+
+
+def _write_note(path: str, content: str) -> str:
+    if _obsidian_write(path, content):
+        return f"Nota '{path}' salva."
+    return f"Erro ao salvar nota '{path}'."
+
+
+def _schedule_task(title: str, due_at: str, details: str = "", contact_phone: str = "") -> str:
+    try:
+        from datetime import datetime as _dt
+        due = _dt.fromisoformat(due_at.replace("Z", "+00:00"))
+        if due.tzinfo is None and due < _dt.now():
+            return f"❌ Horário '{due_at}' já passou. Informe um horário futuro."
+    except ValueError:
+        return f"❌ Formato inválido: '{due_at}'. Use ISO 8601 (ex: 2026-06-19T19:00:00)."
+
+    lines = [
+        f"\n## {title}",
+        f"- **status:** pendente",
+        f"- **prazo:** {due_at}",
+    ]
+    if contact_phone:
+        lines.append(f"- **contato:** {''.join(c for c in contact_phone if c.isdigit())}")
+    if details:
+        lines.append(f"- **detalhes:** {details}")
+
+    append_to_note("mercurio/Tarefas.md", "\n".join(lines), separator="\n")
+    return f"✅ Tarefa agendada: _{title}_ para {due_at}."
+
+
 def _transfer_to_human(reason: str, message_to_user: str, phone: str) -> str:
     from app.services.supabase import upsert_conversation_session
     owner_phone = "".join(c for c in os.environ.get("AUTHORIZED_NUMBER", "") if c.isdigit())
@@ -697,6 +809,17 @@ def execute_tool(name: str, args: dict, phone: str) -> str:
                 return _read_chat(args["phone"], args.get("last_n"))
             case "transfer_to_human":
                 return _transfer_to_human(args["reason"], args["message_to_user"], phone)
+            case "read_note":
+                return _read_note(args["path"])
+            case "write_note":
+                return _write_note(args["path"], args["content"])
+            case "schedule_task":
+                return _schedule_task(
+                    args["title"],
+                    args["due_at"],
+                    args.get("details", ""),
+                    args.get("contact_phone", ""),
+                )
             case _:
                 return f"Tool '{name}' não reconhecida."
     except Exception as e:

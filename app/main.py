@@ -173,12 +173,23 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("EVOLUTION_API_KEY", "mercurio-secret-key")
 app.register_blueprint(admin_bp, url_prefix="/admin")
 app.register_blueprint(api_bp, url_prefix="/api")
-CORS(app, supports_credentials=True)
+CORS(app, supports_credentials=True, origins=["http://localhost:5173"])
 
 
 def _normalize(number: str) -> str:
     """Strip everything except digits."""
     return "".join(c for c in number if c.isdigit())
+
+
+def _is_task_contact(phone: str) -> bool:
+    """Return True if this phone appears in Tarefas.md with aguardando_resposta status."""
+    content = read_note("mercurio/Tarefas.md")
+    if not content:
+        return False
+    digits = _normalize(phone)
+    if digits not in content:
+        return False
+    return "aguardando_resposta" in content
 
 
 def _extract(payload: dict) -> tuple[str, str | None, dict | None] | None:
@@ -296,6 +307,13 @@ def whatsapp_webhook():
         msgs, sid = load_conversation_history(phone)
         msgs.append({"role": "user", "content": text})
         save_conversation_history(phone, msgs, sid or "")
+        return jsonify({"status": "ok"}), 200
+
+    # If this phone is awaiting a task response, route to proactive agent
+    if text and _is_task_contact(phone):
+        from app.agent.proactive import vault_check_with_response
+        logger.info(f"[{phone}] routing to vault_check_with_response")
+        vault_check_with_response(phone, text)
         return jsonify({"status": "ok"}), 200
 
     send_presence(phone, "composing")

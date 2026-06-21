@@ -47,6 +47,8 @@ if __name__ == "__main__":
     register_webhook()
 
     from app.main import app, startup_polling
+    from app.agent.scheduler import start_scheduler
 
     startup_polling()
+    start_scheduler()
     app.run(host="0.0.0.0", port=5000, debug=False)

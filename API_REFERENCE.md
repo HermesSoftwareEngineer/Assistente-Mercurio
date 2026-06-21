@@ -222,40 +222,54 @@ ou
 
 ## Prompts (`/api/prompts`)
 
-Prompts do agente editáveis e persistidos no banco. Sobrevivem a redeploys. Alterações entram em vigor na próxima mensagem processada — sem necessidade de reiniciar o servidor.
+Prompts do agente editáveis e persistidos no banco (`app_settings`). Sobrevivem a redeploys. Alterações entram em vigor na próxima mensagem processada — sem necessidade de reiniciar o servidor.
 
-Existem dois prompts:
-- `owner` — usado quando o número é o do Hermes (`AUTHORIZED_NUMBER`)
-- `non_owner` — usado para todos os outros contatos
+Existem quatro prompts:
+- `prompt_draft` — usado para gerar rascunhos de mensagens WhatsApp
+- `prompt_owner` — modo agente quando o número é o do Hermes (`AUTHORIZED_NUMBER`)
+- `prompt_non_owner` — modo agente para todos os outros contatos
+- `prompt_proactive` — modo heartbeat autônomo (scheduler)
 
-O prompt `non_owner` suporta dois placeholders substituídos em runtime:
-- `{caller}` — número de telefone do usuário atual
-- `{owner_phone}` — número do Hermes (de `AUTHORIZED_NUMBER`)
-
-As seções de formatação WhatsApp e regras de memória são **sempre** acrescentadas pelo código após o conteúdo editável — não é necessário repeti-las no prompt.
+**Notas de formatação:**
+- O prompt `prompt_non_owner` suporta dois placeholders substituídos em runtime: `{caller}` (número do usuário) e `{owner_phone}` (número do Hermes).
+- O prompt `prompt_proactive` suporta: `{hora}`, `{data}`, `{tarefas}`, `{log_hoje}`, `{regras}`.
+- As seções de formatação WhatsApp e regras de memória são **sempre** acrescentadas pelo código após o conteúdo editável — não é necessário repeti-las no prompt.
+- Se o campo `value` estiver vazio no banco, o sistema usa o default hardcoded em `prompts.py`.
 
 ### `GET /api/prompts`
-Retorna os dois prompts com conteúdo e data de atualização.
+Retorna todos os prompts com label, valor atual do banco e default hardcoded.
 
 **Resposta:**
 ```json
 {
-  "prompts": [
-    { "key": "non_owner", "content": "Você é o Mercúrio...", "updated_at": "2026-06-19T..." },
-    { "key": "owner",     "content": "Você é o Mercúrio...", "updated_at": "2026-06-19T..." }
-  ]
+  "prompts": {
+    "prompt_draft": {
+      "label": "Geração de rascunhos WhatsApp",
+      "value": "",
+      "default": "Você é Mercúrio..."
+    },
+    "prompt_owner": {
+      "label": "Agente — modo Hermes (owner)",
+      "value": "Conteúdo customizado salvo no banco...",
+      "default": "Você é o Mercúrio..."
+    },
+    "prompt_non_owner": { "label": "Agente — modo terceiros", "value": "", "default": "..." },
+    "prompt_proactive": { "label": "Heartbeat proativo",      "value": "", "default": "..." }
+  }
 }
 ```
 
+> `value` vazio significa que o default hardcoded está sendo usado. O frontend pode exibir o `default` como placeholder e enviar o `value` editado apenas quando o usuário quiser sobrescrever.
+
 ### `PUT /api/prompts/<key>`
-Substitui o conteúdo de um prompt. `key` deve ser `"owner"` ou `"non_owner"`.
+Salva um novo valor para um prompt. `key` deve ser uma das quatro chaves acima.
 
 **Body:**
 ```json
-{ "content": "Novo conteúdo do prompt..." }
+{ "value": "Novo conteúdo do prompt..." }
 ```
 
-**Resposta:** `200 OK` com `{"ok": true, "key": "..."}` ou `400` se o conteúdo for vazio.
+**Resposta:** `200 OK` com `{"ok": true, "key": "..."}` ou `400` se a chave for inválida.
 
 ---
 
