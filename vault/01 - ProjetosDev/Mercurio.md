@@ -1,6 +1,9 @@
 # Projeto Mercúrio
 
 Assistente pessoal de Hermes Barbosa via WhatsApp.
+Github: https://github.com/HermesSoftwareEngineer/Assistente-Mercurio 
+Frotend: https://github.com/HermesSoftwareEngineer/Mercurio-Front
+Instruções ao Bot: [[RegrasGerais]]
 
 ## Stack
 - **Interface:** WhatsApp via Evolution API (baileys)

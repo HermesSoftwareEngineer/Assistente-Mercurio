@@ -1,0 +1,245 @@
+{
+  "main": {
+    "id": "cf001d877bbfe0ac",
+    "type": "split",
+    "children": [
+      {
+        "id": "fe4fee5e4afa53cc",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "59836ea9bd96309f",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "01 - ProjetosDev/Mercurio.md",
+                "mode": "source",
+                "source": false,
+                "backlinks": true,
+                "backlinkOpts": {
+                  "collapseAll": false,
+                  "extraContext": false,
+                  "sortOrder": "alphabetical",
+                  "showSearch": false,
+                  "searchQuery": "",
+                  "backlinkCollapsed": false,
+                  "unlinkedCollapsed": true
+                }
+              },
+              "icon": "lucide-file",
+              "title": "Mercurio"
+            }
+          },
+          {
+            "id": "25eb6b39f45c63df",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Visualização em gráfico"
+            }
+          },
+          {
+            "id": "8d18a0452b13f775",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Visualização em gráfico"
+            }
+          }
+        ],
+        "currentTab": 2
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "a38472da01158b8e",
+    "type": "split",
+    "children": [
+      {
+        "id": "46cec6b813dc55c6",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "26b556aa19d27fd0",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Explorador de arquivos"
+            }
+          },
+          {
+            "id": "bb6451d4815e9118",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Procurar"
+            }
+          },
+          {
+            "id": "737ea2c7ff6e855d",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Marcadores"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "08baf8713beb7258",
+    "type": "split",
+    "children": [
+      {
+        "id": "3dde5dda4628cd36",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "300e3a27f080b014",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Links inversos"
+            }
+          },
+          {
+            "id": "8c6e3689df4af2bd",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Links de saída"
+            }
+          },
+          {
+            "id": "551a01fd4b618e0d",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Etiquetas"
+            }
+          },
+          {
+            "id": "d4ad56ec4dccde5d",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Todas as propriedades"
+            }
+          },
+          {
+            "id": "74c832055d962e3a",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Sumário"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Abrir a troca rápida": false,
+      "graph:Abrir visualização em gráfico": false,
+      "canvas:Criar novo canvas": false,
+      "daily-notes:Abrir a nota de hoje": false,
+      "templates:Inserir modelo": false,
+      "command-palette:Abrir paleta de comandos": false,
+      "bases:Criar nova base": false
+    }
+  },
+  "active": "8d18a0452b13f775",
+  "lastOpenFiles": [
+    "06 - Igreja/Informações Gerais da IASDMR.md",
+    "00 - Contexto Pessoal/Igreja.md",
+    "00 - Contexto Pessoal/Trabalho.md",
+    "00 - Contexto Pessoal/Hermes.md",
+    "05 - Trabalho/Imobiliária Stylus.md",
+    "01 - ProjetosDev/Mercurio.md",
+    "03 - Tarefas/Tarefas Main.md",
+    "01 - ProjetosDev/Lista de Projetos Dev.md",
+    "07 - Mercurio/instrucoes/RegrasGerais.md",
+    "04 - Conversas/Grupos WhatsApp.md",
+    "04 - Conversas/Contatos.md",
+    "01 - ProjetosDev/TrelloDashboard.md",
+    "2026-06-19.md",
+    "07 - Mercurio/instrucoes/Compilado.md",
+    "07 - Mercurio/Tarefas.md",
+    "06 - Igreja/Ministrações de Louvor/Ministrações.md",
+    "Sem título.canvas",
+    "Sem título.base",
+    "06 - Igreja/Agenda Igreja 2026.md",
+    "06 - Igreja/Ministério de Louvor",
+    "06 - Igreja/Orquestra Asafe/Orquestra Asafe.md",
+    "06 - Igreja/Orquestra Asafe",
+    "06 - Igreja/Ministrações de Louvor/Ministração de louvor Tema Céu.md",
+    "06 - Igreja/Ministrações de Louvor",
+    "06 - Igreja/Ministério Asafe Vocal.md",
+    "06 - Igreja/Eventos Igreja.md",
+    "Sem título",
+    "06 - Igreja"
+  ]
+}

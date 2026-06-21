@@ -6,3 +6,4 @@
 ## Grupos Ativos
 
 *(Nenhum grupo cadastrado ainda)*
+[[Contatos]]

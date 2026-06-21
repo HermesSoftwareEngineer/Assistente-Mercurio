@@ -9,6 +9,10 @@
 - Estilo direto e objetivo
 - Prefere rascunhos para aprovação antes do envio
 - Usa "envia direto" quando quer pular a aprovação
+## Áreas da Vida
+[[Igreja]]
+[[Lista de Projetos Dev]]
+[[Trabalho]]
 
 ## Rotina
 <!-- Descreva aqui sua rotina relevante para o assistente -->
