@@ -145,7 +145,11 @@ def run_agent(phone: str, message: str) -> str:
     history.append({"role": "user", "content": message})
 
     vault_context = _load_vault_context() if is_owner else ""
-    messages = [{"role": "system", "content": build_system_prompt(is_owner, caller, vault_context, _OWNER_PHONE)}] + history
+    from zoneinfo import ZoneInfo
+    now = datetime.now(ZoneInfo("America/Fortaleza"))
+    datetime_header = f"*Agora:* {now.strftime('%d/%m/%Y %H:%M')} (Fortaleza/BRT)\n\n"
+    system_content = datetime_header + build_system_prompt(is_owner, caller, vault_context, _OWNER_PHONE)
+    messages = [{"role": "system", "content": system_content}] + history
 
     kwargs: dict = {"model": MODEL, "messages": messages}
     if is_owner:
