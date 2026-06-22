@@ -27,13 +27,15 @@ def register_webhook() -> None:
 
     # Registra o webhook
     try:
-        resp = requests.put(
+        resp = requests.post(
             f"{base_url}/webhook/set/{instance}",
             headers=headers,
             json={
-                "url": webhook_url,
-                "enabled": True,
-                "events": ["MESSAGES_UPSERT"],
+                "webhook": {
+                    "url": webhook_url,
+                    "enabled": True,
+                    "events": ["MESSAGES_UPSERT"],
+                }
             },
             timeout=10,
         )
