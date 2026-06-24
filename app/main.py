@@ -255,6 +255,14 @@ def whatsapp_webhook():
             logger.warning(f"Blocked unauthorized sender: {phone}")
             return jsonify({"status": "unauthorized"}), 200
 
+    conv_session = get_conversation_session(phone)
+    if conv_session and conv_session.get("mode") == "human":
+        if text:
+            msgs, sid = load_conversation_history(phone)
+            msgs.append({"role": "user", "content": text})
+            save_conversation_history(phone, msgs, sid or "")
+        return jsonify({"status": "ok"}), 200
+
     if pdf_title:
         if book_exists(pdf_title):
             send_message(phone, f"📚 *{pdf_title}* já está indexado na biblioteca!")
@@ -300,13 +308,6 @@ def whatsapp_webhook():
     if text.strip() == "/reset":
         reset_session(phone)
         send_message(phone, "🔄 Conversa reiniciada!")
-        return jsonify({"status": "ok"}), 200
-
-    conv_session = get_conversation_session(phone)
-    if conv_session and conv_session.get("mode") == "human":
-        msgs, sid = load_conversation_history(phone)
-        msgs.append({"role": "user", "content": text})
-        save_conversation_history(phone, msgs, sid or "")
         return jsonify({"status": "ok"}), 200
 
     # If this phone is awaiting a task response, route to proactive agent

@@ -16,6 +16,21 @@ def _headers() -> dict:
     }
 
 
+def is_connected() -> bool:
+    """Return True only if the Evolution instance state is 'open'."""
+    if not all([EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE]):
+        return False
+    url = f"{EVOLUTION_API_URL}/instance/connectionState/{EVOLUTION_INSTANCE}"
+    try:
+        resp = requests.get(url, headers=_headers(), timeout=10)
+        resp.raise_for_status()
+        state = resp.json().get("instance", {}).get("state", "")
+        return state == "open"
+    except requests.RequestException as e:
+        logger.warning(f"is_connected: could not check state: {e}")
+        return False
+
+
 def send_presence(number: str, presence: str = "composing") -> None:
     """Send a presence update (e.g. 'composing' for typing indicator)."""
     if not all([EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE]):

@@ -12,3 +12,11 @@ services:
     volumes:
       - ./vault:/app/vault
       - ./biblioteca:/app/biblioteca
+    networks:
+      - mercurio_default
+      - olimpo-net
+
+networks:
+  mercurio_default:
+  olimpo-net:
+    external: true

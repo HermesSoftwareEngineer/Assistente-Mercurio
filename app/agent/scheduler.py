@@ -98,6 +98,10 @@ def _parse_weekly_schedule(schedule_str: str) -> tuple[str, int, int]:
 def _heartbeat() -> None:
     logger.info("scheduler: heartbeat triggered")
     try:
+        from app.services.evolution import is_connected
+        if not is_connected():
+            logger.warning("scheduler: heartbeat skipped — WhatsApp connection not open")
+            return
         from app.agent.proactive import vault_check
         vault_check()
     except Exception as e:

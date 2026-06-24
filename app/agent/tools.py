@@ -22,6 +22,7 @@ from app.services.supabase import (
     load_conversation_history,
     log_message,
     remove_group,
+    save_conversation_history,
 )
 
 logger = logging.getLogger(__name__)
@@ -540,10 +541,14 @@ def _save_sent_to_vault(draft: str, sent_to: list[str]) -> None:
 
 
 def _send_direct_message(number: str, text: str) -> str:
+    import uuid
     number = "".join(c for c in number if c.isdigit())
     if not number:
         return "Número inválido."
     if send_direct(number, text):
+        msgs, sid = load_conversation_history(number)
+        msgs.append({"role": "assistant", "content": text})
+        save_conversation_history(number, msgs, sid or uuid.uuid4().hex)
         return f"Mensagem enviada para +{number}."
     return f"Falha ao enviar mensagem para +{number}."
 
